@@ -429,12 +429,9 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
-  import {
-    getFirestore, doc, getDoc, setDoc
-  } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+  import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
 
-  // 1) ВСТАВЛЕН РЕАЛЬНЫЙ web-КОНФИГ ИЗ Firebase (у вас уже корректный)
+  // Ваш реальный web-конфиг
   const firebaseConfig = {
     apiKey: "AIzaSyCYaKdFnRC8yJKGhRvKfay9lW0dWIjvlJA",
     authDomain: "ideal-contours.firebaseapp.com",
@@ -445,43 +442,45 @@ if ('serviceWorker' in navigator) {
     measurementId: "G-SG047L9MZ5"
   };
 
-  // 2) ИНИЦИАЛИЗАЦИЯ APP + FIRESTORE
-  const app = initializeApp(firebaseConfig);
-  const db  = getFirestore(app);
+  // Инициализация (без дублей)
+  const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-  // 3) КЛЮЧ СТУДИИ — один и тот же на всех устройствах
+  // Единый ключ студии
   const STUDIO_ID = localStorage.getItem('studioId') || 'ideal-contours';
   localStorage.setItem('studioId', STUDIO_ID);
 
-  // 4) МОСТ ДЛЯ ОСНОВНОГО КОДА
+  // Облако с "динамическими" импортами Firestore прямо внутри функций
   window.cloud = {
     async load() {
       try {
-        const ref = doc(db, 'studios', STUDIO_ID);
-        const snap = await getDoc(ref);
+        const { getFirestore, doc, getDoc } =
+          await import("https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js");
+        const db = getFirestore(app);
+        const snap = await getDoc(doc(db, 'studios', STUDIO_ID));
         if (snap.exists()) {
           const data = snap.data();
-          // кладём в локальное хранилище и перерисовываем
           localStorage.setItem('idealContoursV3', JSON.stringify(data));
           if (window.Store) { window.Store.data = data; renderAll(); }
         }
-      } catch (e) {
-        console.error('Cloud load error', e);
-      }
+      } catch (e) { console.error('Cloud load error', e); }
     },
     async save(data) {
       try {
-        const ref = doc(db, 'studios', STUDIO_ID);
-        await setDoc(ref, data, { merge: false });
-      } catch (e) {
-        console.error('Cloud save error', e);
-      }
+        const { getFirestore, doc, setDoc } =
+          await import("https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js");
+        const db = getFirestore(app);
+        await setDoc(doc(db, 'studios', STUDIO_ID), data, { merge: false });
+      } catch (e) { console.error('Cloud save error', e); }
     }
   };
-  window.cloud.load();   // гарантируем загрузку из облака при инициализации модуля
+
+  // Автозагрузка при старте модуля
+  window.cloud.load();
 </script>
+
 </body>
 </html>
+
 
 
 
