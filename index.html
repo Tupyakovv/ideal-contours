@@ -429,13 +429,12 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 <script type="module">
-  // Import the functions you need from the SDKs you need
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
-  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-analytics.js";
-  // TODO: Add SDKs for Firebase products that you want to use
-  // https://firebase.google.com/docs/web/setup#available-libraries
+  import {
+    getFirestore, doc, getDoc, setDoc
+  } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-  // Вставьте свой конфиг Firebase:
+  // 1) ВСТАВЛЕН РЕАЛЬНЫЙ web-КОНФИГ ИЗ Firebase (у вас уже корректный)
   const firebaseConfig = {
     apiKey: "AIzaSyCYaKdFnRC8yJKGhRvKfay9lW0dWIjvlJA",
     authDomain: "ideal-contours.firebaseapp.com",
@@ -446,33 +445,41 @@ if ('serviceWorker' in navigator) {
     measurementId: "G-SG047L9MZ5"
   };
 
+  // 2) ИНИЦИАЛИЗАЦИЯ APP + FIRESTORE
   const app = initializeApp(firebaseConfig);
-  const analytics = getAnalytics(app);
+  const db  = getFirestore(app);
 
-  // Простой ключ студии (одно «пространство данных» на все устройства)
-  const STUDIO_ID = localStorage.getItem('studioId') || prompt('ID студии латиницей', 'ideal-contours');
+  // 3) КЛЮЧ СТУДИИ — один и тот же на всех устройствах
+  const STUDIO_ID = localStorage.getItem('studioId') || 'ideal-contours';
   localStorage.setItem('studioId', STUDIO_ID);
 
-  // Экспорт «моста» для основного скрипта
+  // 4) МОСТ ДЛЯ ОСНОВНОГО КОДА
   window.cloud = {
     async load() {
       try {
-        const snap = await getDoc(doc(db, 'studios', STUDIO_ID));
+        const ref = doc(db, 'studios', STUDIO_ID);
+        const snap = await getDoc(ref);
         if (snap.exists()) {
           const data = snap.data();
+          // кладём в локальное хранилище и перерисовываем
           localStorage.setItem('idealContoursV3', JSON.stringify(data));
-          // перерисуем UI после подгрузки из облака
-          if (window.Store) { window.Store.data = data; window.Store.save(); }
+          if (window.Store) { window.Store.data = data; renderAll(); }
         }
-      } catch (e) { console.warn('Cloud load error', e); }
+      } catch (e) {
+        console.error('Cloud load error', e);
+      }
     },
     async save(data) {
       try {
-        await setDoc(doc(db, 'studios', STUDIO_ID), data, { merge: false });
-      } catch (e) { console.warn('Cloud save error', e); }
+        const ref = doc(db, 'studios', STUDIO_ID);
+        await setDoc(ref, data, { merge: false });
+      } catch (e) {
+        console.error('Cloud save error', e);
+      }
     }
   };
 </script>
 </body>
 </html>
+
 
