@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0e1320">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>IDEAL CONTOURS — CRM · Записи · Склад · Абонементы</title>
+  <style>
+    :root{
+      --bg:#0b0c10; --panel:#10121a; --panel-2:#171b26; --muted:#a7b0c0; --text:#e9eef7;
+      --acc:#7aa2ff; --bad:#ff6b6b; --ok:#29cc7a; --warn:#ffd166;
+      --shadow:0 10px 30px rgba(0,0,0,.35); --radius:16px;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;color:var(--text);
+      background:radial-gradient(1000px 500px at -10% -20%, #16203d, transparent), linear-gradient(180deg,#0a0c13,#0e1320 60%,#0e1220)}
+    header{display:flex;align-items:center;gap:16px;padding:14px 20px;position:sticky;top:0;z-index:30;
+      background:rgba(12,13,20,.7);backdrop-filter:saturate(140%) blur(10px);border-bottom:1px solid #1f2440}
+    header h1{margin:0;font-size:18px;letter-spacing:.4px}
+    .brand{font-weight:900;letter-spacing:.8px;color:white}
+    .actions{margin-left:auto;display:flex;gap:10px;flex-wrap:wrap}
+    .btn{background:var(--panel-2);border:1px solid #2a2e44;color:var(--text);padding:10px 14px;border-radius:12px;cursor:pointer;
+      transition:.2s transform,.2s background;box-shadow:var(--shadow)}
+    .btn:hover{transform:translateY(-1px);background:#202437}
+    .btn.acc{background:linear-gradient(135deg,#5f86ff,#7aa2ff);border:none;color:white}
+    .btn.danger{background:#3a1217;border:1px solid #5a1e26;color:#ffc1c1}
+    .btn.ghost{background:transparent;border:1px dashed #2a2e44}
+    .layout{display:grid;grid-template-columns:340px 1fr;gap:18px;padding:18px}
+    .card{background:var(--panel);border:1px solid #1f2440;border-radius:var(--radius);box-shadow:var(--shadow)}
+    .card h2,.card h3{margin:0;font-size:16px;font-weight:700;border-bottom:1px solid #1f2440;padding:12px 16px;background:#0e1119;border-radius:16px 16px 0 0}
+    .content{padding:14px 16px}
+    .stack{display:grid;gap:12px}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+    label{display:grid;gap:6px;font-size:12px;color:#c9d4e6}
+    input,select,textarea{background:var(--panel-2);border:1px solid #2a2e44;color:var(--text);padding:10px 12px;border-radius:12px;outline:none;font-size:14px}
+    input[type="date"],input[type="time"]{padding:8px 10px}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th,td{padding:8px 10px;border-bottom:1px solid #1f2336}
+    th{text-align:left;color:#b7c3da;font-weight:600;position:sticky;top:0;background:#101427}
+    .list{display:grid;gap:10px;padding:12px}
+    .client-item{padding:10px 12px;border-radius:12px;background:var(--panel-2);border:1px solid #2a2e44;display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer}
+    .client-item:hover{background:#202437}
+    .muted{color:var(--muted)}
+    .pill{padding:4px 8px;border-radius:999px;font-size:12px;background:#151b2d;border:1px solid #2a2e44}
+    .ok-t{color:#b6fbd3}.warn-t{color:#ffe59b}
+    .right{text-align:right}
+    .calendar{display:grid;gap:8px}
+    .cal-head{display:flex;align-items:center;justify-content:space-between}
+    .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+    .day{height:110px;padding:6px;border-radius:12px;border:1px solid #2a2e44;background:#121528;display:grid;grid-template-rows:auto 1fr;gap:6px;cursor:pointer}
+    .day .d{font-size:12px;color:#b7c3da;display:flex;justify-content:space-between}
+    .event{background:#202845;padding:6px 8px;border-radius:8px;border:1px solid #2a2e44;font-size:12px;margin-top:4px;cursor:pointer}
+    .chip{display:inline-block;padding:6px 10px;border-radius:999px;border:1px solid #2a2e44;background:#151a2b;font-size:12px}
+    .hr{height:1px;background:#1f2336;margin:4px 0 8px}
+    footer{padding:16px;text-align:center;color:#94a3b8}
+    .section-tabs{display:flex;gap:8px;padding:8px}
+    .tab{padding:8px 12px;border-radius:10px;background:#14192a;border:1px solid #2a2e44;cursor:pointer}
+    .tab.active{background:linear-gradient(135deg,#5f86ff,#7aa2ff);color:white;border:none}
+    .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:#151b2d;border:1px solid #2a2e44;font-size:12px}
+    .scroll{max-height:320px;overflow:auto}
+    .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(3,6,15,.6);backdrop-filter:blur(6px);z-index:50}
+    .modal.open{display:flex}
+    .sheet{width:min(560px,92vw);background:#10131e;border:1px solid #1f2440;border-radius:16px;box-shadow:var(--shadow)}
+    .sheet h3{margin:0;padding:14px 16px;border-bottom:1px solid #1f2440;background:#0e1119;border-radius:16px 16px 0 0}
+    .sheet .content{padding:14px 16px}
+  </style>
+</head>
+<body>
+<header>
+  <h1><span class="brand">IDEAL CONTOURS</span> — CRM · Записи · Склад · Абонементы</h1>
+  <div class="actions">
+    <button id="newClientBtn" class="btn acc">+ Клиент</button>
+    <button id="connectDirBtn" class="btn">Папка данных</button>
+    <button id="saveNowBtn" class="btn">Сохранить в файл</button>
+    <label class="btn ghost" style="margin:0">Импорт JSON <input id="importFile" type="file" accept=".json" style="display:none"/></label>
+    <button id="exportBtn" class="btn">Экспорт JSON</button>
+    <button id="clearBtn" class="btn danger">Очистить всё</button>
+  </div>
+</header>
+
+<div class="section-tabs">
+  <div class="tab active" data-tab="clients">Клиенты</div>
+  <div class="tab" data-tab="calendar">Общий календарь</div>
+  <div class="tab" data-tab="inventory">Склад</div>
+  <div class="tab" data-tab="subs">Абонементы</div>
+  <div class="tab" data-tab="reports">Отчёты</div>
+</div>
+
+<div class="layout" id="tab-clients">
+  <aside class="card" style="height: calc(100vh - 140px); overflow:auto">
+    <h2>Клиенты</h2>
+    <div class="content" style="padding:8px">
+      <div class="grid2">
+        <input id="search" placeholder="Поиск по ФИО...">
+        <div class="badge" id="clientStats">—</div>
+      </div>
+      <div id="clientList" class="list"></div>
+    </div>
+  </aside>
+
+  <main class="stack">
+    <section class="card">
+      <h2>Карточка клиента</h2>
+      <div class="content">
+        <div class="grid3">
+          <label>ФИО <input id="fio"/></label>
+          <label>Телефон <input id="phone" placeholder="+7..."/></label>
+          <label>Площадка <select id="source"></select></label>
+        </div>
+        <div class="grid2">
+          <label>Абонемент <select id="subscription"></select></label>
+          <label>Цена (руб.) <input id="price" type="number" min="0" step="100"/></label>
+        </div>
+        <div class="grid3">
+          <label>Костюм/товар
+            <div class="grid2" style="align-items:end">
+              <select id="product"></select>
+              <div class="row">
+                <input id="productQty" type="number" min="1" step="1" value="1" style="width:100px"/>
+                <button class="btn" id="addProductBtn">Добавить</button>
+              </div>
+            </div>
+          </label>
+          <div></div><div></div>
+        </div>
+        <div id="productsArea" class="stack"></div>
+        <div class="grid2" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+          <div class="card"><div class="content"><div class="muted">Итог (абонемент + товары)</div><div id="kpiTotal" style="font-size:18px;font-weight:800">0 ₽</div></div></div>
+          <div class="card"><div class="content"><div class="muted">Оплачено</div><div id="kpiPaid" style="font-size:18px;font-weight:800">0 ₽</div></div></div>
+          <div class="card"><div class="content"><div class="muted">Остаток</div><div id="kpiDue" style="font-size:18px;font-weight:800">0 ₽</div></div></div>
+          <div class="card"><div class="content"><div class="muted">Сеансов остаток</div><div id="kpiSessions" style="font-size:18px;font-weight:800">—</div></div></div>
+        </div>
+        <div class="grid2">
+          <div class="card" style="margin-top:8px">
+            <h3>Оплаты</h3>
+            <div class="content">
+              <div class="row">
+                <label style="flex:1">Дата <input id="payDate" type="date"/></label>
+                <label style="flex:1">Сумма, ₽ <input id="payAmount" type="number" min="0" step="100"/></label>
+                <button class="btn acc" id="addPaymentBtn">Добавить оплату</button>
+              </div>
+              <div class="scroll">
+                <table id="paymentsTable">
+                  <thead><tr><th>Дата</th><th class="right">Сумма</th><th></th></tr></thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:8px">
+            <h3>Примечание</h3>
+            <div class="content"><textarea id="note" rows="6" placeholder="Комментарий по клиенту..."></textarea></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="layout" id="tab-calendar" style="display:none">
+  <section class="card" style="grid-column:1 / -1">
+    <h2>Общий календарь</h2>
+    <div class="content">
+      <div class="calendar">
+        <div class="cal-head">
+          <div class="row">
+            <button class="btn" id="prevMonth">◀</button>
+            <div class="chip" id="monthLabel">Месяц</div>
+            <button class="btn" id="nextMonth">▶</button>
+          </div>
+          <div id="diskStatus" class="muted"></div>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+        <div class="hr"></div>
+        <div class="scroll" style="max-height:360px">
+          <table id="eventsTable">
+            <thead><tr><th>Дата</th><th>Время</th><th>Мин.</th><th>Клиент</th><th>Абонемент</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="layout" id="tab-inventory" style="display:none">
+  <section class="card">
+    <h2>Номенклатура</h2>
+    <div class="content">
+      <div class="grid3">
+        <label>Название <input id="invName"/></label>
+        <label>Ед. изм. <input id="invUnit" placeholder="шт, пачка..."/></label>
+        <label>Цена за ед., ₽ <input id="invPrice" type="number" min="0" step="0.01"/></label>
+      </div>
+      <div class="row"><button class="btn acc" id="addItemBtn">Добавить позицию</button></div>
+      <div class="scroll" style="max-height:280px">
+        <table id="itemsTable"><thead><tr><th>Позиция</th><th>Ед.</th><th class="right">Цена</th><th class="right">Остаток</th><th></th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Операции (приход/расход)</h2>
+    <div class="content">
+      <div class="grid3">
+        <label>Дата <input id="opDate" type="date"/></label>
+        <label>Позиция <select id="opItem"></select></label>
+        <label>Количество <input id="opQty" type="number" step="0.01" min="0"/></label>
+      </div>
+      <div class="grid2">
+        <label>Тип операции
+          <select id="opType">
+            <option value="in">Приход</option>
+            <option value="out">Расход</option>
+          </select>
+        </label>
+        <div class="badge">Цена берётся из карточки позиции</div>
+      </div>
+      <div class="row"><button class="btn acc" id="addOpBtn">Добавить операцию</button></div>
+      <div class="hr"></div>
+      <div id="itemDetails" class="stack"></div>
+    </div>
+  </section>
+</div>
+
+<div class="layout" id="tab-subs" style="display:none">
+  <section class="card" style="grid-column:1 / -1">
+    <h2>Справочник абонементов</h2>
+    <div class="content">
+      <div class="grid3">
+        <label>Название <input id="subName"/></label>
+        <label>Кол-во сеансов <input id="subSessions" type="number" min="1" step="1"/></label>
+        <label>Длительность
+          <select id="subDuration">
+            <option value="45">45 мин</option>
+            <option value="30">30 мин</option>
+            <option value="individual">Индивидуальная</option>
+          </select>
+        </label>
+      </div>
+      <div class="grid2">
+        <label>Цена, ₽ <input id="subPrice" type="number" min="0" step="100"/></label>
+        <div class="row"><button class="btn acc" id="addSubBtn">Добавить абонемент</button></div>
+      </div>
+      <div class="scroll" style="max-height:420px">
+        <table id="subsTable">
+          <thead><tr><th>Название</th><th>Сеансов</th><th>Длит.</th><th class="right">Цена</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="layout" id="tab-reports" style="display:none">
+  <section class="card" style="grid-column:1 / -1">
+    <h2>Отчёты</h2>
+    <div class="content">
+      <div class="row">
+        <label>Месяц <input id="repMonth" type="month"/></label>
+        <button class="btn" id="calcReportBtn">Посчитать</button>
+      </div>
+      <div class="grid2" style="grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px">
+        <div class="card"><div class="content"><div class="muted">Выручка</div><div id="repRevenue" style="font-size:18px;font-weight:800">0 ₽</div></div></div>
+        <div class="card"><div class="content"><div class="muted">Расходники</div><div id="repSupplies" style="font-size:18px;font-weight:800">0 ₽</div></div></div>
+        <div class="card"><div class="content"><div class="muted">Прибыль</div><div id="repProfit" style="font-size:18px;font-weight:800">0 ₽</div></div></div>
+        <div class="card"><div class="content"><div class="muted">Записей</div><div id="repEvents" style="font-size:18px;font-weight:800">0</div></div></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<footer>Данные сохраняются локально и (при подключении) в файл <strong>ideal_contours_data.json</strong>. Версия 3.0</footer>
+
+<div class="modal" id="eventModal">
+  <div class="sheet">
+    <h3 id="eventModalTitle">Запись</h3>
+    <div class="content">
+      <div class="grid3">
+        <label>Дата <input id="mDate" type="date"/></label>
+        <label>Время <input id="mTime" type="time"/></label>
+        <label>Клиент <select id="mClient"></select></label>
+      </div>
+      <div class="grid2">
+        <label>Длительность (мин.) <input id="mDuration" type="number" min="10" step="5"/></label>
+        <div id="mSubHint" class="badge">—</div>
+      </div>
+      <div class="row" style="justify-content:space-between">
+        <div class="row">
+          <button class="btn acc" id="mSave">Сохранить</button>
+          <button class="btn" id="mCancel">Отмена</button>
+        </div>
+        <button class="btn danger" id="mDelete" style="display:none">Удалить запись</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function ymdLocal(d){const dt=new Date(d);return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0')}
+function timeLocal(d){const dt=new Date(d);return String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0')}
+function parseDateTimeLocal(dateStr,timeStr){const [y,m,d]=dateStr.split('-').map(Number);const [hh,mm]=timeStr.split(':').map(Number);return new Date(y,m-1,d,hh,mm,0,0)}
+function daysInMonth(y,m){return new Date(y,m+1,0).getDate()}
+function fmtRub(n){return (n||0).toLocaleString('ru-RU')+' ₽'}
+function uuid(){return'xxxx-xxxx-4xxx-yxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16)})}
+
+const VERSION=3; const storeKey="idealContoursV3";
+const Store={data:{clients:[],events:[],inventory:{items:[],ops:[]},catalog:{subs:[],platforms:["2 ГИС","Яндекс","Instagram","Постоянный","Telegram","Рекомендации"]},version:VERSION},
+  load(){const raw=localStorage.getItem(storeKey);if(raw){try{this.data=JSON.parse(raw)}catch(e){}} if(!this.data.catalog.subs?.length) seedSubs()},
+  save(){
+  localStorage.setItem(storeKey, JSON.stringify(this.data));
+  renderAll();
+  saveToDiskDebounced();
+  // облако (если подключено)
+  if (window.cloud?.save) window.cloud.save(this.data).catch(console.warn);
+}
+  export(){const blob=new Blob([JSON.stringify(this.data,null,2)],{type:"application/json"});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download="ideal_contours_data.json";a.click();URL.revokeObjectURL(a.href)},
+  async import(file){const text=await file.text();try{const data=JSON.parse(text);if(!data.clients||!data.events||!data.inventory||!data.catalog)throw new Error("Неверный файл");this.data=data;this.save()}catch(e){alert("Ошибка импорта: "+e.message)}},
+  clear(){if(confirm("Удалить все данные?")){localStorage.removeItem(storeKey);this.data={clients:[],events:[],inventory:{items:[],ops:[]},catalog:{subs:[],platforms:this.data.catalog.platforms},version:VERSION};seedSubs();renderAll()}}
+};
+function seedSubs(){
+  const list=[
+    ["Индивидуальный 12 сеансов",12,"individual",18000],["Индивидуальный 15 сеансов",15,"individual",21000],
+    ["LPG 10 сеансов 45",10,"45",15000],["LPG 10 сеансов 30",10,"30",12000],["LPG 5 сеансов 45",5,"45",7000],
+    ["Вибро 10 сеансов 45",10,"45",12000],["Вибро 10 сеансов 30",10,"30",10000],["Вибро 5 сеансов 45",5,"45",6000],
+    ["Вакуумный 10 сеансов 45",10,"45",12000],["Вакуумный 10 сеансов 30",10,"30",10000],["Вакуумный 5 сеансов 45",5,"45",6000],
+    ["Вакуумно-роликовый Анкор 10 сеансов 45",10,"45",17000],["Вакуумно-роликовый Анкор 10 сеансов 30",10,"30",14000],["Вакуумно-роликовый Анкор 5 сеансов 45",5,"45",8000],
+    ["Кавитация 10 сеансов 45",10,"45",17000],["Кавитация 10 сеансов 30",10,"30",14000],["Кавитация 5 сеансов 45",5,"45",8000],
+    ["Миостимуляция 10 сеансов 45",10,"45",8000],["Миостимуляция 10 сеансов 30",10,"30",6000],["Миостимуляция 5 сеансов 45",5,"45",4000],
+    ["Ручные банки 10 сеансов 45",10,"45",8000],["Ручные банки 10 сеансов 30",10,"30",6000],["Ручные банки 5 сеансов 45",5,"45",4000],
+    ["Паук 10 сеансов 45",10,"45",8000],["Паук 10 сеансов 30",10,"30",6000],["Паук 5 сеансов 45",5,"45",4000],
+    ["Прессотерапия 10 сеансов 45",10,"45",10000],["Прессотерапия 10 сеансов 30",10,"30",8000],["Прессотерапия 5 сеансов 45",5,"45",5000],
+    ["Термоодеяло 10 сеансов 45",10,"45",6000],["Термоодеяло 10 сеансов 30",10,"30",4000],["Термоодеяло 5 сеансов 45",5,"45",3000],
+    ["Готовый",10,"45",10000],["Лимфодренаж",10,"45",15000],["Горячий курс",10,"45",13500],
+    ["Разовый LPG 45",1,"45",1500],["Разовый LPG 30",1,"30",1200],["Пробный LPG",1,"30",1000],
+    ["Разовый вибро 45",1,"45",1200],["Разовый вибро 30",1,"30",1000],["Пробный вибро",1,"30",800],
+    ["Разовый вакуумный 45",1,"45",1200],["Разовый вакуумный 30",1,"30",1000],["Пробный вакуумный",1,"30",800],
+    ["Разовый вакуумно-роликовый 45",1,"45",1700],["Разовый вакуумно-роликовый 30",1,"30",1400],["Пробный вакуумно-роликовый",1,"30",1200],
+    ["Разовый кавитация 45",1,"45",1700],["Разовый кавитация 30",1,"30",1400],["Пробный кавитация",1,"30",1200],
+    ["Разовый миостимуляция 45",1,"45",800],["Разовый миостимуляция 30",1,"30",600],["Пробный миостимуляция",1,"30",400],
+    ["Разовый ручный банки 45",1,"45",800],["Разовый ручный банки 30",1,"30",600],["Пробный ручный банки",1,"30",400],
+    ["Разовый паук 45",1,"45",800],["Разовый паук 30",1,"30",600],["Пробный паук",1,"30",400],
+    ["Разовый прессотерапия 45",1,"45",1000],["Разовый прессотерапия 30",1,"30",800],["Пробный прессотерапия",1,"30",600],
+    ["Разовый термоодеяло с обертыванием 45",1,"45",600],["Разовый термоодеяло с обертыванием 30",1,"30",400],["Пробный термоодеяло с обертыванием",1,"30",300]
+  ].map(([name,sessions,duration,price])=>({id:uuid(),name,sessions,duration,price}));
+  Store.data.catalog.subs=list;
+}
+function getSubById(id){return Store.data.catalog.subs.find(s=>s.id===id)}
+function sessionsForClient(c){const s=getSubById(c.subId);return s?s.sessions||0:0}
+function durationForClient(c){const s=getSubById(c.subId);return s?s.duration:"45"}
+function defaultPriceForSub(id){const s=getSubById(id);return s?s.price||0:0}
+
+Store.load();
+let currentClientId=Store.data.clients[0]?.id||null;
+let viewMonth=new Date();viewMonth.setDate(1);let editingEventId=null;
+
+function fillSelect(sel,options,value){const keep=sel.value;sel.innerHTML="";options.forEach(({value:v,label})=>{const o=document.createElement('option');o.value=v;o.textContent=label;sel.appendChild(o)});if(value!=null)sel.value=value;else if(keep)sel.value=keep}
+function initSelectors(){
+  const src=document.getElementById('source');if(src)fillSelect(src,Store.data.catalog.platforms.map(p=>({value:p,label:p})));
+  const sub=document.getElementById('subscription');if(sub)fillSelect(sub,Store.data.catalog.subs.map(s=>({value:s.id,label:`${s.name} — ${s.price} ₽`})),getClient()?.subId);
+  const prod=document.getElementById('product');if(prod)fillSelect(prod,[{value:"LPG",label:"LPG — 600 ₽"},{value:"Пресс",label:"Пресс — 300 ₽"},{value:"LPG+Пресс",label:"LPG+Пресс — 900 ₽"}]);
+  const mc=document.getElementById('mClient');if(mc)fillSelect(mc,Store.data.clients.map(c=>({value:c.id,label:c.fio||"Без имени"})));
+  const opItem=document.getElementById('opItem');if(opItem)fillSelect(opItem,Store.data.inventory.items.map(i=>({value:i.id,label:i.name})));
+}
+
+function createClient(){const s0=Store.data.catalog.subs[0];const id=uuid();const client={id,fio:"Новый клиент",phone:"",source:Store.data.catalog.platforms[0],note:"",subId:s0.id,price:s0.price,payments:[],products:[]};Store.data.clients.push(client);currentClientId=id;Store.save();document.getElementById('fio').focus()}
+function getClient(){return Store.data.clients.find(c=>c.id===currentClientId)}
+function totalProductsSum(c){return(c.products||[]).reduce((s,p)=>s+p.price*p.qty,0)}
+function paidSum(c){return(c.payments||[]).reduce((s,p)=>s+(+p.amount||0),0)}
+function totalDue(c){return(+c.price||0)+totalProductsSum(c)}
+function sessionsUsed(c){return Store.data.events.filter(e=>e.clientId===c.id).length}
+function sessionsLeft(c){const t=sessionsForClient(c)||0;if(t===0)return"—";return Math.max(0,t-sessionsUsed(c))}
+
+function renderClients(filter=""){const box=document.getElementById('clientList');if(!box)return;box.innerHTML="";const arr=Store.data.clients.slice().filter(c=>(c.fio||"").toLowerCase().includes(filter.toLowerCase())).sort((a,b)=>(a.fio||"").localeCompare(b.fio||"",'ru'));document.getElementById('clientStats').textContent=`${arr.length} клиентов`;if(arr.length===0){box.innerHTML=`<div class="content"><div class="muted">Нет клиентов. Нажмите «Клиент».</div></div>`;return}arr.forEach(c=>{const due=totalDue(c),paid=paidSum(c);const div=document.createElement('div');div.className="client-item";div.innerHTML=`<div><div><strong>${c.fio||"Без имени"}</strong></div><div class="muted">${getSubById(c.subId)?.name||"—"}</div></div><div class="stack right"><span class="pill">${fmtRub(due)}</span><span class="pill ${paid>=due?'ok-t':'warn-t'}">Оплачено: ${(paid||0).toLocaleString('ru-RU')} ₽</span></div>`;div.onclick=()=>{currentClientId=c.id;loadClientForm();renderKPIs();renderPayments();renderProducts()};box.appendChild(div)})}
+function loadClientForm(){const c=getClient();if(!c)return;document.getElementById('fio').value=c.fio||"";document.getElementById('phone').value=c.phone||"";document.getElementById('source').value=c.source||Store.data.catalog.platforms[0];document.getElementById('subscription').value=c.subId;document.getElementById('price').value=c.price||0;document.getElementById('note').value=c.note||""}
+function renderKPIs(){const c=getClient();const total=c?totalDue(c):0,paid=c?paidSum(c):0,due=Math.max(0,total-paid);document.getElementById('kpiTotal').textContent=fmtRub(total);document.getElementById('kpiPaid').textContent=fmtRub(paid);document.getElementById('kpiDue').textContent=fmtRub(due);document.getElementById('kpiSessions').textContent=c?((sessionsForClient(c)||0)===0?"—":`${sessionsLeft(c)} из ${sessionsForClient(c)}`):"—"}
+function renderPayments(){const c=getClient();const tb=document.querySelector('#paymentsTable tbody');if(!tb)return;tb.innerHTML="";if(!c)return;(c.payments||[]).forEach((p,idx)=>{const tr=document.createElement('tr');tr.innerHTML=`<td>${p.date}</td><td class="right">${(+p.amount||0).toLocaleString('ru-RU')} ₽</td><td class="right"><button class="btn danger">Удалить</button></td>`;tr.querySelector('button').onclick=()=>{c.payments.splice(idx,1);Store.save()};tb.appendChild(tr)})}
+function renderProducts(){const c=getClient();const box=document.getElementById('productsArea');if(!box)return;box.innerHTML="";if(!c)return;if(!c.products?.length){box.innerHTML=`<div class="muted">Добавьте товар — он включится в итог.</div>`;return}const table=document.createElement('table');table.innerHTML=`<thead><tr><th>Товар</th><th>Кол-во</th><th class="right">Цена</th><th class="right">Сумма</th><th></th></tr></thead>`;const tb=document.createElement('tbody');c.products.forEach((p,idx)=>{const tr=document.createElement('tr');tr.innerHTML=`<td>${p.name}</td><td>${p.qty}</td><td class="right">${p.price.toLocaleString('ru-RU')} ₽</td><td class="right">${(p.price*p.qty).toLocaleString('ru-RU')} ₽</td><td class="right"><button class="btn danger">Удалить</button></td>`;tr.querySelector('button').onclick=()=>{c.products.splice(idx,1);Store.save()};tb.appendChild(tr)});table.appendChild(tb);box.appendChild(table)}
+
+function renderEventsTable(){const tb=document.querySelector('#eventsTable tbody');if(!tb)return;tb.innerHTML="";const events=Store.data.events.slice().sort((a,b)=>a.startMs-b.startMs);events.forEach((e,idx)=>{const c=Store.data.clients.find(x=>x.id===e.clientId);const dt=new Date(e.startMs);const tr=document.createElement('tr');tr.innerHTML=`<td>${ymdLocal(dt)}</td><td>${timeLocal(dt)}</td><td>${e.duration}</td><td>${c?c.fio:"—"}</td><td>${c?getSubById(c.subId)?.name:"—"}</td><td class="right"><button class="btn danger">Удалить</button></td>`;tr.querySelector('button').onclick=()=>{Store.data.events.splice(idx,1);Store.save()};tb.appendChild(tr)})}
+function renderCalendar(){const grid=document.getElementById('calGrid');if(!grid)return;grid.innerHTML="";const label=document.getElementById('monthLabel');const y=viewMonth.getFullYear(),m=viewMonth.getMonth();label.textContent=viewMonth.toLocaleDateString('ru-RU',{month:'long',year:'numeric'});const firstDow=new Date(y,m,1).getDay();const startOffset=(firstDow+6)%7;const total=daysInMonth(y,m);const head=["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];head.forEach(h=>{const d=document.createElement('div');d.className='muted';d.style.textAlign='center';d.textContent=h;grid.appendChild(d)});for(let i=0;i<startOffset;i++){grid.appendChild(document.createElement('div'))}for(let d=1;d<=total;d++){const date=new Date(y,m,d);const dateISO=ymdLocal(date);const cell=document.createElement('div');cell.className='day';const header=document.createElement('div');header.className='d';header.innerHTML=`<span>${d}</span>`;cell.appendChild(header);const body=document.createElement('div');body.style.overflow='auto';const events=Store.data.events.filter(e=>ymdLocal(e.startMs)===dateISO).sort((a,b)=>a.startMs-b.startMs);events.forEach(e=>{const c=Store.data.clients.find(x=>x.id===e.clientId);const st=new Date(e.startMs);const el=document.createElement('div');el.className='event';el.textContent=`${timeLocal(st)} · ${c?c.fio:"—"} (${e.duration}м)`;el.onclick=(ev)=>{ev.stopPropagation();openEventModal(dateISO,timeLocal(st),e.clientId,e.duration,e.id)};body.appendChild(el)});cell.onclick=()=>openEventModal(dateISO,"10:00",getClient()?.id||Store.data.clients[0]?.id||"",null,null);cell.appendChild(body);grid.appendChild(cell)}}
+function hasOverlap(startMs,duration,excludeEventId=null){const s=startMs,e=s+duration*60000;return Store.data.events.some(ev=>{if(excludeEventId&&ev.id===excludeEventId)return false;const s2=ev.startMs,e2=s2+ev.duration*60000;return(s<e2&&e>s2)})}
+
+
+function openEventModal(dateISO,timeHHMM,clientId,duration,eventId){editingEventId=eventId||null;const modal=document.getElementById('eventModal');document.getElementById('eventModalTitle').textContent=eventId?"Редактирование записи":"Новая запись";document.getElementById('mDate').value=dateISO;document.getElementById('mTime').value=timeHHMM;initSelectors();document.getElementById('mClient').value=clientId||(Store.data.clients[0]?.id||"");const selClient=Store.data.clients.find(c=>c.id===document.getElementById('mClient').value);const durType=selClient?durationForClient(selClient):"45";const durInput=document.getElementById('mDuration');if(durType==="individual"){durInput.disabled=false;durInput.value=duration||60;document.getElementById('mSubHint').textContent="Индивидуальная длительность"}else{durInput.disabled=true;durInput.value=parseInt(durType,10);document.getElementById('mSubHint').textContent=`По абонементу: ${durType} мин.`}document.getElementById('mDelete').style.display=eventId?'inline-block':'none';modal.classList.add('open')}
+document.getElementById('mClient').addEventListener('change',()=>{const c=Store.data.clients.find(x=>x.id===document.getElementById('mClient').value);const durType=c?durationForClient(c):"45";const durInput=document.getElementById('mDuration');if(durType==="individual"){durInput.disabled=false;document.getElementById('mSubHint').textContent="Индивидуальная длительность";if(!durInput.value)durInput.value=60}else{durInput.disabled=true;durInput.value=parseInt(durType,10);document.getElementById('mSubHint').textContent=`По абонементу: ${durType} мин.`}});
+document.getElementById('mCancel').onclick=()=>document.getElementById('eventModal').classList.remove('open');
+document.getElementById('mDelete').onclick=()=>{if(editingEventId){const idx=Store.data.events.findIndex(e=>e.id===editingEventId);if(idx>=0)Store.data.events.splice(idx,1);Store.save()}document.getElementById('eventModal').classList.remove('open')};
+document.getElementById('mSave').onclick=()=>{const date=document.getElementById('mDate').value;const time=document.getElementById('mTime').value;const clientId=document.getElementById('mClient').value;const duration=parseInt(document.getElementById('mDuration').value||0,10);if(!clientId){alert("Выберите клиента");return}const client=Store.data.clients.find(c=>c.id===clientId);const durType=durationForClient(client);const realDuration=durType==="individual"?duration:parseInt(durType,10);const start=parseDateTimeLocal(date,time);const limit=sessionsForClient(client)||0;const used=Store.data.events.filter(e=>e.clientId===clientId&&(!editingEventId||e.id!==editingEventId)).length;if(limit>0&&used>=limit){alert("Сеансы по абонементу закончились у выбранного клиента");return}if(hasOverlap(start.getTime(),realDuration,editingEventId)){alert("Конфликт с другой записью");return}if(editingEventId){const e=Store.data.events.find(x=>x.id===editingEventId);if(e){e.clientId=clientId;e.startMs=start.getTime();e.duration=realDuration}}else{Store.data.events.push({id:uuid(),clientId,startMs:start.getTime(),duration:realDuration})}Store.save();document.getElementById('eventModal').classList.remove('open')};
+
+function stockByItemId(id){return Store.data.inventory.ops.reduce((acc,op)=>{if(op.itemId!==id)return acc;return acc+(op.type==='in'?op.qty:-op.qty)},0)}
+function renderItems(){const tb=document.querySelector('#itemsTable tbody');if(!tb)return;tb.innerHTML="";Store.data.inventory.items.forEach((i,idx)=>{const tr=document.createElement('tr');tr.innerHTML=`<td><a href="#" data-id="${i.id}" class="itemLink">${i.name}</a></td><td>${i.unit||""}</td><td class="right">${(+i.price||0).toLocaleString('ru-RU')}</td><td class="right">${stockByItemId(i.id)}</td><td class="right"><button class="btn danger">Удалить</button></td>`;tr.querySelector('button').onclick=()=>{if(confirm("Удалить позицию и все её операции?")){Store.data.inventory.ops=Store.data.inventory.ops.filter(op=>op.itemId!==i.id);Store.data.inventory.items.splice(idx,1);Store.save()}};tb.appendChild(tr)});tb.querySelectorAll('.itemLink').forEach(a=>a.onclick=(e)=>{e.preventDefault();openItemDetails(a.dataset.id)})}
+function openItemDetails(itemId){const i=Store.data.inventory.items.find(x=>x.id===itemId);if(!i)return;const box=document.getElementById('itemDetails');if(!box)return;const ops=Store.data.inventory.ops.filter(o=>o.itemId===itemId).sort((a,b)=>new Date(a.date)-new Date(b.date));const inOps=ops.filter(o=>o.type==='in');const outOps=ops.filter(o=>o.type==='out');let balance=0;const rowsLeft=inOps.map(o=>{balance+=o.qty;return `<tr><td>${o.date}</td><td class="right">${o.qty}</td><td class="right">${balance}</td></tr>`}).join('');balance=0;const rowsRight=outOps.map(o=>{balance-=o.qty;return `<tr><td>${o.date}</td><td class="right">-${o.qty}</td><td class="right">${stockByItemId(itemId)+balance}</td></tr>`}).join('');box.innerHTML=`<div class="badge">Выбрано: <strong>${i.name}</strong>, цена ${(+i.price||0).toLocaleString('ru-RU')} ₽/${i.unit||"ед."}, остаток: <strong>${stockByItemId(i.id)}</strong></div><div class="grid2"><div><div class="muted" style="margin:8px 0">Приход</div><table><thead><tr><th>Дата</th><th class="right">Кол-во</th><th class="right">Остаток</th></tr></thead><tbody>${rowsLeft||""}</tbody></table></div><div><div class="muted" style="margin:8px 0">Расход</div><table><thead><tr><th>Дата</th><th class="right">Кол-во</th><th class="right">Остаток</th></tr></thead><tbody>${rowsRight||""}</tbody></table></div></div>`}
+
+function renderSubs(){const tb=document.querySelector('#subsTable tbody');if(!tb)return;tb.innerHTML="";Store.data.catalog.subs.forEach((s,idx)=>{const tr=document.createElement('tr');tr.innerHTML=`<td><input data-idx="${idx}" data-field="name" value="${s.name}" style="width:100%"/></td><td><input data-idx="${idx}" data-field="sessions" type="number" min="1" step="1" value="${s.sessions}"/></td><td><select data-idx="${idx}" data-field="duration"><option value="45" ${s.duration==="45"?"selected":""}>45</option><option value="30" ${s.duration==="30"?"selected":""}>30</option><option value="individual" ${s.duration==="individual"?"selected":""}>инд.</option></select></td><td class="right"><input data-idx="${idx}" data-field="price" type="number" min="0" step="100" value="${s.price}" style="width:120px"/></td><td class="right"><button class="btn danger">Удалить</button></td>`;tr.querySelector('button').onclick=()=>{if(confirm("Удалить абонемент?")){Store.data.catalog.subs.splice(idx,1);Store.save()}};tr.querySelectorAll('input,select').forEach(el=>{el.addEventListener('input',e=>{const i=parseInt(el.dataset.idx,10);const f=el.dataset.field;let v=el.value;if(f==="sessions"||f==="price")v=parseInt(v||0,10);Store.data.catalog.subs[i][f]=v;Store.save()})});tb.appendChild(tr)});initSelectors()}
+
+function calcMonthReport(ym){const [Y,M]=ym.split('-').map(Number);const start=new Date(Y,M-1,1);const end=new Date(Y,M,1);let revenue=0;Store.data.clients.forEach(c=>(c.payments||[]).forEach(p=>{const d=new Date(p.date+'T00:00:00');if(d>=start&&d<end)revenue+=+p.amount||0}));let supplies=0;Store.data.inventory.ops.forEach(op=>{const d=new Date(op.date+'T00:00:00');if(d>=start&&d<end&&op.type==='out'){const item=Store.data.inventory.items.find(i=>i.id===op.itemId);supplies+=(+item?.price||0)*(+op.qty||0)}});const eventsCount=Store.data.events.filter(e=>{const dt=new Date(e.startMs);return dt>=start&&dt<end}).length;return{revenue,supplies,profit:revenue-supplies,eventsCount}}
+function renderReport(){const ym=document.getElementById('repMonth').value||new Date().toISOString().slice(0,7);const r=calcMonthReport(ym);document.getElementById('repRevenue').textContent=fmtRub(r.revenue);document.getElementById('repSupplies').textContent=fmtRub(r.supplies);document.getElementById('repProfit').textContent=fmtRub(r.profit);document.getElementById('repEvents').textContent=r.eventsCount}
+
+let dirHandle=null,fileHandle=null,saveTimer=null;
+function isFSA(){return'showDirectoryPicker'in window}
+async function connectDir(){if(!isFSA()){alert("Ваш браузер не поддерживает прямое сохранение в папку. Используйте Экспорт/Импорт JSON.");return}try{dirHandle=await window.showDirectoryPicker();fileHandle=await dirHandle.getFileHandle('ideal_contours_data.json',{create:true});await saveToDisk();updateDiskStatus("Папка подключена")}catch(e){console.warn(e);updateDiskStatus("Папка не подключена")}}
+async function saveToDisk(){if(!fileHandle)return;const w=await fileHandle.createWritable();await w.write(JSON.stringify(Store.data,null,2));await w.close()}
+function saveToDiskDebounced(){if(!fileHandle)return;clearTimeout(saveTimer);saveTimer=setTimeout(saveToDisk,400)}
+function updateDiskStatus(t){const el=document.getElementById('diskStatus');if(el)el.textContent=t}
+
+document.querySelectorAll('.tab').forEach(el=>{el.onclick=()=>{document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');const show=el.dataset.tab;document.getElementById('tab-clients').style.display=(show==='clients')?'grid':'none';document.getElementById('tab-calendar').style.display=(show==='calendar')?'grid':'none';document.getElementById('tab-inventory').style.display=(show==='inventory')?'grid':'none';document.getElementById('tab-subs').style.display=(show==='subs')?'grid':'none';document.getElementById('tab-reports').style.display=(show==='reports')?'grid':'none';renderAll()}});
+document.getElementById('newClientBtn').onclick=createClient;document.getElementById('connectDirBtn').onclick=connectDir;document.getElementById('saveNowBtn').onclick=saveToDisk;document.getElementById('exportBtn').onclick=()=>Store.export();document.getElementById('clearBtn').onclick=()=>Store.clear();document.getElementById('importFile').addEventListener('change',e=>{const f=e.target.files?.[0];if(f)Store.import(f)});document.getElementById('search').addEventListener('input',e=>renderClients(e.target.value));
+['fio','phone','note'].forEach(id=>{document.getElementById(id).addEventListener('input',e=>{const c=getClient();if(!c)return;c[id]=e.target.value;Store.save()})});
+document.getElementById('source').addEventListener('change',e=>{const c=getClient();if(!c)return;c.source=e.target.value;Store.save()});
+document.getElementById('subscription').addEventListener('change',e=>{const c=getClient();if(!c)return;const subId=e.target.value;c.subId=subId;c.price=defaultPriceForSub(subId);Store.save();loadClientForm()});
+document.getElementById('price').addEventListener('input',e=>{const c=getClient();if(!c)return;c.price=parseFloat(e.target.value||0);Store.save()});
+document.getElementById('addProductBtn').onclick=()=>{const c=getClient();if(!c)return alert("Сначала выберите клиента");const name=document.getElementById('product').value;const price=name==="LPG"?600:name==="Пресс"?300:900;const qty=parseInt(document.getElementById('productQty').value||1,10);c.products=c.products||[];c.products.push({name,price,qty});Store.save()};
+document.getElementById('addPaymentBtn').onclick=()=>{const c=getClient();if(!c)return alert("Сначала выберите клиента");const date=document.getElementById('payDate').value||ymdLocal(new Date());const amount=parseFloat(document.getElementById('payAmount').value||0);if(amount<=0)return alert("Введите сумму больше 0");c.payments.push({date,amount});document.getElementById('payAmount').value="";Store.save()};
+document.getElementById('prevMonth').onclick=()=>{viewMonth.setMonth(viewMonth.getMonth()-1);renderCalendar()};
+document.getElementById('nextMonth').onclick=()=>{viewMonth.setMonth(viewMonth.getMonth()+1);renderCalendar()};
+document.getElementById('addItemBtn').onclick=()=>{const name=(document.getElementById('invName').value||"").trim();if(!name)return alert("Название");const unit=document.getElementById('invUnit').value||"";const price=parseFloat(document.getElementById('invPrice').value||0);Store.data.inventory.items.push({id:uuid(),name,unit,price});document.getElementById('invName').value="";document.getElementById('invUnit').value="";document.getElementById('invPrice').value="";Store.save()};
+document.getElementById('addOpBtn').onclick=()=>{if(Store.data.inventory.items.length===0)return alert("Добавьте позицию");const date=document.getElementById('opDate').value||ymdLocal(new Date());const itemId=document.getElementById('opItem').value;const qty=parseFloat(document.getElementById('opQty').value||0);if(qty<=0)return alert("Количество > 0");const type=document.getElementById('opType').value;if(type==='out'){const stock=Store.data.inventory.ops.reduce((acc,op)=>{if(op.itemId!==itemId)return acc;return acc+(op.type==='in'?op.qty:-op.qty)},0);if(qty>stock){if(!confirm("Расход превышает остаток. Продолжить?"))return}}Store.data.inventory.ops.push({id:uuid(),date,itemId,qty,type});document.getElementById('opQty').value="";Store.save();openItemDetails(itemId)};
+document.getElementById('addSubBtn').onclick=()=>{const name=(document.getElementById('subName').value||"").trim();if(!name)return alert("Название");const sessions=parseInt(document.getElementById('subSessions').value||1,10);const duration=document.getElementById('subDuration').value;const price=parseInt(document.getElementById('subPrice').value||0,10);Store.data.catalog.subs.push({id:uuid(),name,sessions,duration,price});document.getElementById('subName').value="";document.getElementById('subSessions').value="";document.getElementById('subPrice').value="";Store.save()};
+function renderAll(){initSelectors();renderClients(document.getElementById('search').value||"");if(currentClientId){loadClientForm()}renderKPIs();renderPayments();renderProducts();renderCalendar();renderEventsTable();renderItems();renderSubs();renderReport();updateDiskStatus(fileHandle?"Автосохранение включено":"Автосохранение в файл выключено")}
+if(!currentClientId&&Store.data.clients[0])currentClientId=Store.data.clients[0].id;document.getElementById('payDate').value=ymdLocal(new Date());document.getElementById('opDate').value=ymdLocal(new Date());document.getElementById('repMonth').value=new Date().toISOString().slice(0,7);if (window.cloud?.load) window.cloud.load();renderAll();
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/service-worker.js');
+}
+</script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  // Вставьте свой конфиг Firebase:
+  const FIREBASE_CONFIG = {
+    apiKey: "XXX",
+    authDomain: "XXX.firebaseapp.com",
+    projectId: "XXX",
+    storageBucket: "XXX.appspot.com",
+    messagingSenderId: "XXX",
+    appId: "XXX"
+  };
+
+  const app = initializeApp(FIREBASE_CONFIG);
+  const db = getFirestore(app);
+
+  // Простой ключ студии (одно «пространство данных» на все устройства)
+  const STUDIO_ID = localStorage.getItem('studioId') || prompt('ID студии латиницей', 'ideal-contours');
+  localStorage.setItem('studioId', STUDIO_ID);
+
+  // Экспорт «моста» для основного скрипта
+  window.cloud = {
+    async load() {
+      try {
+        const snap = await getDoc(doc(db, 'studios', STUDIO_ID));
+        if (snap.exists()) {
+          const data = snap.data();
+          localStorage.setItem('idealContoursV3', JSON.stringify(data));
+          // перерисуем UI после подгрузки из облака
+          if (window.Store) { window.Store.data = data; window.Store.save(); }
+        }
+      } catch (e) { console.warn('Cloud load error', e); }
+    },
+    async save(data) {
+      try {
+        await setDoc(doc(db, 'studios', STUDIO_ID), data, { merge: false });
+      } catch (e) { console.warn('Cloud save error', e); }
+    }
+  };
+</script>
+</body>
+</html>
