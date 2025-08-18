@@ -24,31 +24,28 @@
                  linear-gradient(180deg,#0a0c13,#0e1320 60%,#0e1220)
     }
 
-    /* Header (файл/облако) */
+    /* Шапка (теперь НЕ sticky) */
     header{
-      display:flex;align-items:center;gap:12px;padding:10px 12px;position:sticky;top:0;z-index:40;
-      background:rgba(12,13,20,0.7);backdrop-filter:saturate(140%) blur(10px);border-bottom:1px solid var(--border)
+      display:flex;align-items:center;gap:12px;padding:14px 12px 10px;margin:0;
+      background:transparent;border-bottom:1px solid var(--border)
     }
     header h1{margin:0;font-size:18px;letter-spacing:.4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .brand{font-weight:900;letter-spacing:.8px;color:white}
     .actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
-    .btn{
-      background:var(--panel-2);border:1px solid var(--border-2);color:var(--text);
-      padding:8px 12px;border-radius:12px;cursor:pointer;user-select:none;
-      transition:.2s transform,.2s background;box-shadow:var(--shadow);white-space:nowrap
-    }
+    .btn{background:var(--panel-2);border:1px solid var(--border-2);color:var(--text);padding:8px 12px;border-radius:12px;cursor:pointer;user-select:none;transition:.2s transform,.2s background;box-shadow:var(--shadow);white-space:nowrap}
     .btn:hover{transform:translateY(-1px);background:#202437}
     .btn.acc{background:linear-gradient(135deg,#5f86ff,#7aa2ff);border:none;color:white}
     .btn.danger{background:#3a1217;border:1px solid #5a1e26;color:#ffc1c1}
     .btn.ghost{background:transparent;border:1px dashed var(--border-2)}
     .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 
-    /* Top section tabs (навигатор) */
+    /* Навигатор (липкий и авто-скрытие) */
     .section-tabs{
-      display:flex;gap:8px;padding:8px;position:sticky;top:56px;z-index:35;background:transparent;
+      display:flex;gap:8px;padding:8px 12px;position:sticky;top:0;z-index:35;background:rgba(12,13,20,0.85);
+      backdrop-filter:saturate(130%) blur(6px);border-bottom:1px solid var(--border);
       transition:transform .25s ease;
     }
-    .section-tabs.hide{transform:translateY(-140%)}
+    .section-tabs.hide{transform:translateY(-120%)}
     .tab{padding:8px 12px;border-radius:10px;background:#14192a;border:1px solid var(--border-2);cursor:pointer}
     .tab.active{background:linear-gradient(135deg,#5f86ff,#7aa2ff);color:white;border:none}
 
@@ -61,11 +58,7 @@
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
     .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
     label{display:grid;gap:6px;font-size:12px;color:#c9d4e6}
-    input,select,textarea{
-      width:100%;
-      background:var(--panel-2);border:1px solid var(--border-2);color:var(--text);
-      padding:10px 12px;border-radius:12px;outline:none;font-size:14px;min-height:40px
-    }
+    input,select,textarea{width:100%;background:var(--panel-2);border:1px solid var(--border-2);color:var(--text);padding:10px 12px;border-radius:12px;outline:none;font-size:14px;min-height:40px}
     input[type="date"],input[type="time"]{padding:8px 10px}
     table{width:100%;border-collapse:collapse;font-size:13px}
     th,td{padding:8px 10px;border-bottom:1px solid #1f2336}
@@ -108,7 +101,7 @@
     .sheet h3{margin:0;padding:14px 16px;border-bottom:1px solid var(--border);background:#0e1119;border-radius:16px 16px 0 0}
     .sheet .content{padding:14px 16px}
 
-    /* Responsive tweaks */
+    /* Responsive */
     @media (max-width:1200px){ .layout{grid-template-columns:280px 1fr} }
     @media (max-width:900px){
       header h1{font-size:16px}
@@ -117,7 +110,6 @@
       main.stack{order:1}
       .grid2{grid-template-columns:1fr}
       .grid3{grid-template-columns:1fr}
-      .section-tabs{top:54px}
       .actions .btn{padding:8px 10px}
     }
     @media (max-width:420px){
@@ -138,7 +130,7 @@
   </div>
 </header>
 
-<!-- Навигатор -->
+<!-- Липкая панель вкладок -->
 <div class="section-tabs" id="topTabs">
   <div class="tab active" data-tab="clients">Главная</div>
   <div class="tab" data-tab="calendar">Календарь</div>
@@ -1159,3 +1151,4 @@ if ('serviceWorker' in navigator) { navigator.serviceWorker.register('service-wo
 </script>
 </body>
 </html>
+
