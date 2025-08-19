@@ -46,6 +46,9 @@
       display:flex;align-items:center;gap:12px;padding:10px 12px;position:static;;top:0;z-index:40;
       background:rgba(12,13,20,0.7);backdrop-filter:saturate(140%) blur(10px);border-bottom:1px solid var(--border)
     }
+    @media (max-width:900px){
+      header{ padding:8px }           /* сама шапка ниже ростом */
+    }
     header h1{margin:0;font-size:18px;letter-spacing:.4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .brand{font-weight:900;letter-spacing:.8px;color:white}
     .actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
@@ -128,7 +131,13 @@
 
     .scroll{max-height:320px;overflow:auto}
     .xscroll{overflow:auto}
-    .table-wide{min-width:720px}
+    .table-wide{ min-width:0; width:100% }
+
+    @media (max-width:900px){
+      table{ table-layout:fixed }                /* колонки делим поровну */
+      th,td{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+      th,td{ padding:8px }                       /* чуть компактнее на телефоне */
+    }
 
     /* Calendar */
     .calendar{display:grid;gap:8px}
@@ -168,6 +177,26 @@
     .sheet{width:min(720px,92vw);background:#10131e;border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow)}
     .sheet h3{margin:0;padding:14px 16px;border-bottom:1px solid var(--border);background:#0e1119;border-radius:16px 16px 0 0}
     .sheet .content{padding:14px 16px}
+
+    /* --- MOBILE FIXES (iOS zoom + компактность) --- */
+    html{ -webkit-text-size-adjust:100% }              /* не даём Safari «переформатировать» шрифты */
+
+    @media (max-width:900px){
+      /* Главное: запрещаем авто-зум на фокусе поля (iOS требует >=16px) */
+      input, select, textarea{ font-size:16px; min-height:44px }
+
+      /* Чекбоксы — увеличим кликабельность */
+      input[type="checkbox"]{ width:22px; height:22px }
+
+      /* Кнопки в шапке — поменьше, но в один горизонтальный ряд со скроллом */
+      header .actions{
+        margin-left:0;
+        display:flex; gap:8px; flex-wrap:nowrap;
+        overflow-x:auto; -webkit-overflow-scrolling:touch;
+      }
+      header .actions .btn, header .actions label.btn{ flex:0 0 auto }
+      header .btn{ padding:6px 8px; font-size:12px; border-radius:10px }
+    }
 
     /* Responsive tweaks */
     @media (max-width:1200px){ .layout{grid-template-columns:280px 1fr} }
@@ -1580,7 +1609,7 @@ renderAll();
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js?v=20'); // ← добавили v=12
+  navigator.serviceWorker.register('service-worker.js?v=21'); // ← добавили v=12
 }
 </script>
 
