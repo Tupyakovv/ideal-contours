@@ -8,6 +8,28 @@
   <link rel="manifest" href="manifest.json">
   <title>IDEAL CONTOURS — CRM · Записи · Склад · Абонементы</title>
   <style>
+  .day{ position:relative }                    /* нужно для .now-line */
+  .day.today{
+    border-color: var(--acc);
+    box-shadow: inset 0 0 0 1px rgba(122,162,255,.6);
+  }
+  .day.today .d span{ color:#fff; font-weight:800 }
+
+  .event.past{
+    background:#1a2036;
+    border-color:#2a3358;
+    opacity:.85;
+  }
+
+  .now-line{
+    position:absolute;
+    left:6px; right:6px;
+    height:2px;
+    background: var(--bad);                   /* красная линия как на скрине */
+    border-radius:2px;
+    box-shadow:0 0 0 1px rgba(255,107,107,.25);
+    pointer-events:none;
+  }
     :root{
       --bg:#0b0c10; --panel:#10121a; --panel-2:#171b26; --muted:#a7b0c0; --text:#e9eef7;
       --acc:#7aa2ff; --bad:#ff6b6b; --ok:#29cc7a; --warn:#ffd166;
@@ -854,37 +876,97 @@ function renderEventsTable(){
     tb.appendChild(tr)
   })
 }
-function renderCalendar(){
-  const grid=document.getElementById('calGrid');if(!grid)return;grid.innerHTML="";
-  const label=document.getElementById('monthLabel');
-  const y=viewMonth.getFullYear(),m=viewMonth.getMonth();
-  label.textContent=viewMonth.toLocaleDateString('ru-RU',{month:'long',year:'numeric'});
-  const firstDow=new Date(y,m,1).getDay();const startOffset=(firstDow+6)%7;const total=daysInMonth(y,m);
-  const head=["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
-  head.forEach(h=>{const d=document.createElement('div');d.className='muted';d.style.textAlign='center';d.textContent=h;grid.appendChild(d)});
-  for(let i=0;i<startOffset;i++){grid.appendChild(document.createElement('div'))}
-  for(let d=1;d<=total;d++){
-    const date=new Date(y,m,d);
-    const dateISO=ymdLocal(date);
-    const cell=document.createElement('div');cell.className='day';
-    const header=document.createElement('div');header.className='d';header.innerHTML=`<span>${d}</span>`;cell.appendChild(header);
-    const body=document.createElement('div');body.style.overflow='auto';
-    const events=Store.data.events.filter(e=>ymdLocal(e.startMs)===dateISO).sort((a,b)=>a.startMs-b.startMs);
-    events.forEach(e=>{
-      const c=Store.data.clients.find(x=>x.id===e.clientId);
-      const pr=purchaseById(e.purchaseId)?.purchase;
-      const st=new Date(e.startMs);
-      const el=document.createElement('div');el.className='event';
-      el.textContent=`${timeLocal(st)} · ${c?c.fio:"—"} (${e.duration}м)`;
-      el.onclick=(ev)=>{ev.stopPropagation();openEventModal(dateISO,timeLocal(st),e.clientId,e.duration,e.id)};
-      body.appendChild(el)
-    });
-    // по клику создаём запись только если у текущего клиента есть активные абонементы
-    const activeClient = getClient();
-    const hasActive = (activeClient?.purchases||[]).some(p=>sessionsLeftPurchase(p)>0);
-    cell.onclick=()=>openEventModal(dateISO,"10:00",activeClient?.id||"",null,null);
-    if(!hasActive){/* всё равно открываем, но сохранение будет недоступно */}
-    cell.appendChild(body);grid.appendChild(cell)
+  function renderCalendar(){
+    const grid=document.getElementById('calGrid');if(!grid)return;grid.innerHTML="";
+    const label=document.getElementById('monthLabel');
+    const y=viewMonth.getFullYear(),m=viewMonth.getMonth();
+    label.textContent=viewMonth.toLocaleDateString('ru-RU',{month:'long',year:'numeric'});
+    const firstDow=new Date(y,m,1).getDay();const startOffset=(firstDow+6)%7;const total=daysInMonth(y,m);
+    const head=["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
+    head.forEach(h=>{const d=document.createElement('div');d.className='muted';d.style.textAlign='center';d.textContent=h;grid.appendChild(d)});
+    for(let i=0;i<startOffset;i++){grid.appendChild(document.createElement('div'))}
+
+    const todayISO = ymdLocal(new Date());
+    const now = Date.now();
+
+    for(let d=1;d<=total;d++){
+      const date=new Date(y,m,d);
+      const dateISO=ymdLocal(date);
+      const cell=document.createElement('div');cell.className='day';
+      if (dateISO===todayISO) cell.classList.add('today');
+
+      const header=document.createElement('div');
+      header.className='d';
+      header.innerHTML=`<span>${d}</span>`;
+      cell.appendChild(header);
+
+      const body=document.createElement('div');
+      body.className='day-body';               // чтобы проще искать ниже
+      body.style.overflow='auto';
+
+      const events=Store.data.events
+        .filter(e=>ymdLocal(e.startMs)===dateISO)
+        .sort((a,b)=>a.startMs-b.startMs);
+
+      events.forEach(e=>{
+        const c=Store.data.clients.find(x=>x.id===e.clientId);
+        const st=new Date(e.startMs);
+        const el=document.createElement('div');el.className='event';
+        el.textContent=`${timeLocal(st)} · ${c?c.fio:"—"} (${e.duration}м)`;
+
+        // помечаем прошедшие
+        const endsAt = e.startMs + e.duration*60000;
+        if (endsAt < now) el.classList.add('past');
+
+        el.onclick=(ev)=>{ev.stopPropagation();openEventModal(dateISO,timeLocal(st),e.clientId,e.duration,e.id)};
+        body.appendChild(el);
+      });
+
+      // клик по пустому месту дня
+      const activeClient = getClient();
+      cell.onclick=()=>openEventModal(dateISO,"10:00",activeClient?.id||"",null,null);
+
+      cell.appendChild(body);
+
+      // линия текущего времени для сегодняшнего дня
+      if (dateISO===todayISO){
+        const line=document.createElement('div');
+        line.className='now-line';
+        cell.appendChild(line);
+      }
+
+      grid.appendChild(cell);
+    }
+
+    // после отрисовки — запустить расчёт позиции линии
+    startNowLineTimer();
+  }
+  let nowLineTimer=null;
+
+  function updateNowLinePositions(){
+    const cell=document.querySelector('.day.today');
+    if(!cell) return;                   // календарь не на текущем месяце
+    const line=cell.querySelector('.now-line');
+    const head=cell.querySelector('.d');
+    if(!line || !head) return;
+
+    // верх видимой части (ниже заголовка дня)
+    const contentTop = head.offsetTop + head.offsetHeight + 4;  // 4 — промежуток
+    const paddingBottom = 6;                                     // как в .day padding
+    const usable = cell.clientHeight - contentTop - paddingBottom;
+
+    const now = new Date();
+    const mins = now.getHours()*60 + now.getMinutes();
+    const frac = Math.min(1, Math.max(0, mins / (24*60)));       // 0..1 по суткам
+
+    line.style.top = (contentTop + usable*frac) + 'px';
+  }
+
+  function startNowLineTimer(){
+    clearInterval(nowLineTimer);
+    updateNowLinePositions();
+    // сдвигать раз в минуту
+    nowLineTimer = setInterval(updateNowLinePositions, 60*1000);
   }
 }
 
@@ -1153,7 +1235,7 @@ renderAll();
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js?v=16'); // ← добавили v=12
+  navigator.serviceWorker.register('service-worker.js?v=17'); // ← добавили v=12
 }
 </script>
 
