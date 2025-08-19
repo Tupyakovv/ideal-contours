@@ -485,7 +485,7 @@ function initSelectors(){
   const src=document.getElementById('source');if(src)fillSelect(src,Store.data.catalog.platforms.map(p=>({value:p,label:p})));
   const sub=document.getElementById('subscription');if(sub)fillSelect(sub,Store.data.catalog.subs.map(s=>({value:s.id,label:`${s.name} — ${s.price} ₽`})),getClient()?.subId);
   const prod=document.getElementById('product');if(prod)fillSelect(prod,[{value:"LPG",label:"LPG — 600 ₽"},{value:"Пресс",label:"Пресс — 300 ₽"},{value:"LPG+Пресс",label:"LPG+Пресс — 900 ₽"}]);
-  const mc=document.getElementById('mClient');if(mc)fillSelect(mc,Store.data.clients.map(c=>({value:c.id,label=c.fio||"Без имени"})));
+  const mc = document.getElementById('mClient');if (mc) fillSelect(mc,Store.data.clients.map(c => ({ value: c.id, label: c.fio || "Без имени"})));
 
   const opItem=document.getElementById('opItem');if(opItem)fillSelect(opItem,Store.data.inventory.items.map(i=>({value:i.id,label=i.name})));
 
@@ -1033,4 +1033,5 @@ if ('serviceWorker' in navigator) {
 </script>
 </body>
 </html>
+
 
