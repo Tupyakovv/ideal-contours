@@ -1,4 +1,4 @@
-const CACHE = 'ideal-contours-v19'; // ↑ новая версия
+const CACHE = 'ideal-contours-v20'; // ↑ новая версия
 const ASSETS = [
   './',
   './index.html',
