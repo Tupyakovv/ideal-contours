@@ -467,7 +467,7 @@ function migrateData(){
 }
 
 /* ===== state ===== */
-let currentClientId=Store.data.clients[0]?.id||null;
+let currentClientId = null;
 let viewMonth=new Date();viewMonth.setDate(1);
 let editingEventId=null;
 
@@ -520,7 +520,7 @@ function renderClients(filter=""){
     div.className="client-item";
     div.innerHTML=`<div><div><strong>${c.fio||"Без имени"}</strong></div><div class="muted">${(c.purchases?.length||0)} абон.</div></div>
                    <div class="stack right"><span class="pill ${debt>0?'warn-t':'ok-t'}">${fmtRub(debt)}</span></div>`;
-    div.onclick=()=>{currentClientId=c.id;loadClientForm();renderPurchases()};
+    div.onclick=()=>{ currentClientId=c.id; loadClientForm(); renderPurchases(); updateClientCardVisibility(); };
     box.appendChild(div)
   })
 }
@@ -534,6 +534,18 @@ function loadClientForm(){
   document.getElementById('source').value=c.source||Store.data.catalog.platforms[0];
   document.getElementById('birth').value=c.birth||"";
   document.getElementById('note').value=c.note||"";
+}
+function clearClientForm(){
+  ['fio','phone','birth','note'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  const src=document.getElementById('source');
+  if(src) fillSelect(src, Store.data.catalog.platforms.map(p=>({value:p,label:p})), '');
+}
+
+function updateClientCardVisibility(){
+  const section=document.querySelector('#tab-clients main .card');
+  if(section) section.style.display = currentClientId ? 'block' : 'none';
 }
 
 /* ===== Purchases list (right) ===== */
@@ -1064,6 +1076,7 @@ document.querySelectorAll('.tab').forEach(el=>{
     if(el.id==='quickSaleTab'){openSale();return}
     document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');
     const show=el.dataset.tab;
+    if (show==='clients') { currentClientId = null; }
     document.getElementById('tab-clients').style.display=(show==='clients')?'grid':'none';
     document.getElementById('tab-calendar').style.display=(show==='calendar')?'grid':'none';
     document.getElementById('tab-inventory').style.display=(show==='inventory')?'grid':'none';
@@ -1114,13 +1127,15 @@ document.getElementById('addSubBtn').onclick=()=>{const name=(document.getElemen
 function renderAll(){
   initSelectors();
   renderClients(document.getElementById('search').value||"");
-  if(currentClientId){loadClientForm()}
+  if(currentClientId){ loadClientForm(); } else { clearClientForm(); }
+  renderPurchases();
+  updateClientCardVisibility();
   renderPurchases();
   renderCalendar();renderEventsTable();
   renderItems();renderSubs();renderReport();
   updateDiskStatus(fileHandle?"Автосохранение включено":"Автосохранение в файл выключено")
 }
-if(!currentClientId&&Store.data.clients[0])currentClientId=Store.data.clients[0].id;
+
 document.getElementById('opDate').value=ymdLocal(new Date());
 document.getElementById('repMonth').value=new Date().toISOString().slice(0,7);
 Store.load();
@@ -1129,7 +1144,7 @@ renderAll();
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js?v=14'); // ← добавили v=12
+  navigator.serviceWorker.register('service-worker.js?v=15'); // ← добавили v=12
 }
 </script>
 
