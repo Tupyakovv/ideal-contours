@@ -1,4 +1,4 @@
-const CACHE = 'ideal-contours-v10'; // ↑ новая версия
+const CACHE = 'ideal-contours-v12'; // ↑ новая версия
 const ASSETS = [
   './',
   './index.html',
@@ -40,4 +40,5 @@ self.addEventListener('activate', (e) => {
     caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))))
   ;
   self.clients.claim();
+
 });
