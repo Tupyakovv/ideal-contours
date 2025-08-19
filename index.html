@@ -982,7 +982,13 @@ function saveToDiskDebounced(){if(!fileHandle)return;clearTimeout(saveTimer);sav
 function updateDiskStatus(t){const el=document.getElementById('diskStatus');if(el)el.textContent=t}
 
 /* ===== New Sale modal ===== */
-function openSale(){initSelectors();document.getElementById('saleModal').classList.add('open');recalcSale()}
+function openSale(){
+  initSelectors();
+  document.getElementById('saleModal').classList.add('open');
+  // заставим сработать ваш обработчик и показать/скрыть #sNewBox
+  document.getElementById('sClient').dispatchEvent(new Event('change'));
+  recalcSale();
+}
 function closeSale(){document.getElementById('saleModal').classList.remove('open')}
 function recalcSale(){
   const sub=getSubById(document.getElementById('sSub').value);
@@ -1167,4 +1173,5 @@ if ('serviceWorker' in navigator) {
 </script>
 </body>
 </html>
+
 
