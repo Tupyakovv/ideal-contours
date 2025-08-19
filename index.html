@@ -172,11 +172,37 @@
     }
 
     /* Modal */
-    .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(3,6,15,.6);backdrop-filter:blur(6px);z-index:50}
-    .modal.open{display:flex}
-    .sheet{width:min(720px,92vw);background:#10131e;border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow)}
+    /* Модалка: безопасная высота + прокрутка внутри листа */
+    .modal{
+      position:fixed; inset:0;
+      display:none; align-items:center; justify-content:center;
+      padding:12px;                     /* чтобы лист не прилипал к краям */
+      background:rgba(3,6,15,.6);
+      -webkit-backdrop-filter: blur(6px);
+      backdrop-filter: blur(6px);
+      z-index:50;
+    }
+    .modal.open{ display:flex }
+    .sheet{
+      width:min(720px,92vw);
+      max-height:calc(100dvh - 24px);   /* 100dvh — динамическая высота iOS */
+      overflow:auto;                    /* если контент выше — скроллим лист */
+      background:#10131e;
+      border:1px solid var(--border);
+      border-radius:16px;
+      box-shadow:var(--shadow);
+    }
     .sheet h3{margin:0;padding:14px 16px;border-bottom:1px solid var(--border);background:#0e1119;border-radius:16px 16px 0 0}
-    .sheet .content{padding:14px 16px}
+    .sheet .content{                    /* кнопки не уезжают за home-бар */
+      padding-bottom:max(14px, env(safe-area-inset-bottom));
+    }
+
+    /* iOS: фикс хит-теста при зуме (создаём отдельный слой) */
+    @supports (-webkit-touch-callout:none){
+      .modal{ transform:translateZ(0) }
+      /* Если вдруг промахи останутся — можно убрать blur только на iOS:
+         .modal{ -webkit-backdrop-filter:none; backdrop-filter:none; } */
+    }
 
     /* --- MOBILE FIXES (iOS zoom + компактность) --- */
     html{ -webkit-text-size-adjust:100% }              /* не даём Safari «переформатировать» шрифты */
@@ -497,13 +523,33 @@
 
 <script>
 /* ===== helpers ===== */
+const _vp = document.querySelector('meta[name="viewport"]');
+function lockZoom(){
+  if(!_vp) return;
+  _vp.setAttribute('content',
+    'width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no'
+  );
+}
+function unlockZoom(){
+  if(!_vp) return;
+  _vp.setAttribute('content',
+    'width=device-width, initial-scale=1.0, viewport-fit=cover'
+  );
+}
+
 function openEditPurchaseModal(pid){
+  lockZoom();
+
   const info = purchaseById(pid);
   if (!info) return;
   const p = info.purchase;
 
   const subSel = document.getElementById('eSub');
-  fillSelect(subSel, Store.data.catalog.subs.map(s => ({value:s.id, label:`${s.name} — ${s.price} ₽`})), p.subId);
+  fillSelect(
+    subSel,
+    Store.data.catalog.subs.map(s => ({value:s.id, label:`${s.name} — ${s.price} ₽`})),
+    p.subId
+  );
 
   document.getElementById('ePid').value = pid;
   document.getElementById('eDiscPct').value = p.discount?.pct || 0;
@@ -512,7 +558,10 @@ function openEditPurchaseModal(pid){
   recalcEditPurchase();
   document.getElementById('editPurchaseModal').classList.add('open');
 }
-function closeEditPurchaseModal(){ document.getElementById('editPurchaseModal').classList.remove('open') }
+function closeEditPurchaseModal(){
+  document.getElementById('editPurchaseModal').classList.remove('open');
+  unlockZoom();
+}
 function recalcEditPurchase(){
   const sub = getSubById(document.getElementById('eSub').value);
   const pct = parseFloat(document.getElementById('eDiscPct').value||0);
@@ -603,6 +652,7 @@ function closeEventModal(){
   const m = document.getElementById('eventModal');
   if (m) m.classList.remove('open');
   editingEventId = null;
+  unlockZoom();                               // возвращаем зум
 }
 
 let silentSaveTimer=null;
@@ -1088,16 +1138,19 @@ function hintForPurchase(p){
   return hint;
 }
 function openEventModal(dateISO, timeHHMM, clientId, duration, eventId){
+  lockZoom();                                // блокируем зум на время модалки
+
   editingEventId = eventId || null;
   const modal = document.getElementById('eventModal');
 
-  document.getElementById('eventModalTitle').textContent = eventId ? "Редактирование записи" : "Новая запись";
+  document.getElementById('eventModalTitle').textContent =
+    eventId ? "Редактирование записи" : "Новая запись";
   document.getElementById('mDate').value = dateISO;
   document.getElementById('mTime').value = timeHHMM;
 
-  setFutureMinForModal();           // ← НОВОЕ
+  setFutureMinForModal();
 
-  // // стало: только для НОВОЙ записи
+  // только для НОВОЙ записи — не давать прошедшее время
   if (!editingEventId) {
     const maybePast = parseDateTimeLocal(
       document.getElementById('mDate').value,
@@ -1120,7 +1173,7 @@ function openEventModal(dateISO, timeHHMM, clientId, duration, eventId){
   const pr  = purchaseById(pId)?.purchase;
   const durType = pr ? durationForPurchase(pr) : "45";
   const durInput = document.getElementById('mDuration');
-  if (durType === "individual"){ durInput.disabled=false; durInput.value = duration || 60; }
+  if (durType === "individual"){ durInput.disabled = false; durInput.value = duration || 60; }
   else { durInput.disabled = true; durInput.value = parseInt(durType,10); }
 
   document.getElementById('mDelete').style.display = eventId ? 'inline-block' : 'none';
@@ -1433,12 +1486,16 @@ function toggleNewClientBox(){
 document.getElementById('sClient').addEventListener('change', toggleNewClientBox);
 
 function openSale(){
+  lockZoom();
   initSelectors();
-  toggleNewClientBox(); // сразу выставляем корректное состояние
+  toggleNewClientBox();                       // сразу выставляем корректное состояние
   document.getElementById('saleModal').classList.add('open');
   recalcSale();
 }
-function closeSale(){document.getElementById('saleModal').classList.remove('open')}
+function closeSale(){
+  document.getElementById('saleModal').classList.remove('open');
+  unlockZoom();
+}
 function recalcSale(){
   const sub=getSubById(document.getElementById('sSub').value);
   const pct=parseFloat(document.getElementById('sDiscPct').value||0);
@@ -1609,7 +1666,7 @@ renderAll();
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js?v=21'); // ← добавили v=12
+  navigator.serviceWorker.register('service-worker.js?v=22'); // ← добавили v=12
 }
 </script>
 
