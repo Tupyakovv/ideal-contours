@@ -168,7 +168,7 @@
   </aside>
 
   <main class="stack">
-    <section class="card">
+    <section id="clientCard" class="card" style="display:none">
       <h2>Карточка клиента</h2>
       <div class="content">
         <div class="grid3">
@@ -539,10 +539,19 @@ function clearClientForm(){
   ['fio','phone','birth','note'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
-  const src=document.getElementById('source');
-  if(src) fillSelect(src, Store.data.catalog.platforms.map(p=>({value:p,label:p})), '');
+  const src = document.getElementById('source');
+  if (src) fillSelect(src, Store.data.catalog.platforms.map(p=>({value:p,label:p})), '');
+  const box = document.getElementById('purchasesArea');
+  if (box) box.innerHTML = '<div class="muted">Выберите клиента...</div>';
 }
 
+function updateClientCard(){
+  const has = !!(currentClientId && getClient());
+  const section = document.getElementById('clientCard');
+  if (section) section.style.display = has ? 'block' : 'none';
+  if (has) { loadClientForm(); renderPurchases(); }
+  else { clearClientForm(); }
+}
 function updateClientCardVisibility(){
   const section=document.querySelector('#tab-clients main .card');
   if(section) section.style.display = currentClientId ? 'block' : 'none';
@@ -1144,7 +1153,7 @@ renderAll();
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js?v=15'); // ← добавили v=12
+  navigator.serviceWorker.register('service-worker.js?v=16'); // ← добавили v=12
 }
 </script>
 
