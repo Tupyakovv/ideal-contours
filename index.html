@@ -982,11 +982,17 @@ function saveToDiskDebounced(){if(!fileHandle)return;clearTimeout(saveTimer);sav
 function updateDiskStatus(t){const el=document.getElementById('diskStatus');if(el)el.textContent=t}
 
 /* ===== New Sale modal ===== */
+function toggleNewClientBox(){
+  const isNew = document.getElementById('sClient').value === "__new__";
+  document.getElementById('sNewBox').style.display = isNew ? 'grid' : 'none';
+}
+
+document.getElementById('sClient').addEventListener('change', toggleNewClientBox);
+
 function openSale(){
   initSelectors();
+  toggleNewClientBox(); // сразу выставляем корректное состояние
   document.getElementById('saleModal').classList.add('open');
-  // заставим сработать ваш обработчик и показать/скрыть #sNewBox
-  document.getElementById('sClient').dispatchEvent(new Event('change'));
   recalcSale();
 }
 function closeSale(){document.getElementById('saleModal').classList.remove('open')}
@@ -1123,7 +1129,7 @@ renderAll();
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js?v=13'); // ← добавили v=12
+  navigator.serviceWorker.register('service-worker.js?v=14'); // ← добавили v=12
 }
 </script>
 
@@ -1173,6 +1179,3 @@ if ('serviceWorker' in navigator) {
 </script>
 </body>
 </html>
-
-
-
