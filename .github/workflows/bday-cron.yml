@@ -1,0 +1,23 @@
+name: Birthday Push (daily)
+
+on:
+  schedule:
+    - cron: '0 6 * * *'   # каждый день 06:00 UTC = 09:00 по Москве
+  workflow_dispatch:      # возможность запустить вручную
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install deps
+        run: npm i firebase-admin@^12
+      - name: Run cron
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: node scripts/bday-cron.mjs
