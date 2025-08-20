@@ -309,6 +309,9 @@
           <h3>Примечание</h3>
           <div class="content"><textarea id="note" rows="6" placeholder="Комментарий по клиенту..."></textarea></div>
         </div>
+        <div class="row" style="justify-content:flex-end; margin-top:12px">
+          <button class="btn danger" id="deleteClientBtn">Удалить клиента</button>
+        </div>
       </div>
     </section>
   </main>
@@ -833,6 +836,30 @@ function renderClients(filter=""){
 }
 
 /* ===== Client card (top) ===== */
+function deleteCurrentClient(){
+  const c = getClient();
+  if (!c) return;
+
+  const name = c.fio || 'Без имени';
+
+  // первое подтверждение
+  if (!confirm(`Удалить клиента «${name}» со всеми абонементами и записями?`)) return;
+  // второе подтверждение
+  if (!confirm('Действие необратимо. Точно удалить?')) return;
+
+  // удаляем все записи клиента
+  Store.data.events = Store.data.events.filter(e => e.clientId !== c.id);
+
+  // удаляем клиента
+  const idx = Store.data.clients.findIndex(x => x.id === c.id);
+  if (idx >= 0) Store.data.clients.splice(idx, 1);
+
+  currentClientId = null;           // спрятать карточку
+  Store.save();                      // перерисует списки/календарь
+  updateClientCardVisibility();
+}
+
+
 function getClient(){return Store.data.clients.find(c=>c.id===currentClientId)}
 function loadClientForm(){
   const c=getClient();if(!c)return;
@@ -1559,6 +1586,10 @@ document.getElementById('sCreate').onclick=()=>{
 };
 
 /* ===== wiring ===== */
+
+const delBtn = document.getElementById('deleteClientBtn');
+if (delBtn) delBtn.onclick = deleteCurrentClient;
+
 document.querySelectorAll('.tab').forEach(el=>{
   el.onclick=()=>{
     if(el.id==='quickSaleTab'){openSale();return}
@@ -1666,7 +1697,7 @@ renderAll();
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js?v=22'); // ← добавили v=12
+  navigator.serviceWorker.register('service-worker.js?v=23'); // ← добавили v=12
 }
 </script>
 
