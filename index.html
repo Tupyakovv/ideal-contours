@@ -9,6 +9,17 @@
   <title>IDEAL CONTOURS — CRM · Записи · Склад · Абонементы</title>
   <style>
 
+  /* Toast для напоминаний */
+  .toast{
+    position:fixed; right:16px; bottom:16px; z-index:60;
+    background:#10131e; border:1px solid var(--border); color:var(--text);
+    border-radius:14px; box-shadow:var(--shadow); padding:10px 12px; display:none;
+    max-width:min(92vw,520px)
+  }
+  .toast.show{ display:block; animation:toastIn .25s ease }
+  @keyframes toastIn{ from{ transform:translateY(8px); opacity:.0 } to{ transform:translateY(0); opacity:1 } }
+  .toast .row{ gap:8px; justify-content:space-between; align-items:center }
+
     :root{
       --bg:#0b0c10; --panel:#10121a; --panel-2:#171b26; --muted:#a7b0c0; --text:#e9eef7;
       --acc:#7aa2ff; --bad:#ff6b6b; --ok:#29cc7a; --warn:#ffd166;
@@ -254,6 +265,7 @@
 <header>
   <h1><span class="brand">IDEAL CONTOURS</span> — CRM · Записи · Склад · Абонементы</h1>
   <div class="actions">
+    <button id="notifyBtn" class="btn">🔔 Уведомления</button>
     <button id="connectDirBtn" class="btn">Папка данных</button>
     <button id="saveNowBtn" class="btn">Сохранить в файл</button>
     <label class="btn ghost" style="margin:0">Импорт JSON <input id="importFile" type="file" accept=".json" style="display:none"/></label>
@@ -432,6 +444,8 @@
 
 <footer>Данные сохраняются локально и (при подключении) в файл <strong>ideal_contours_data.json</strong>. Версия 4.0</footer>
 
+<div id="bdayToast" class="toast" role="status" aria-live="polite"></div>
+
 <!-- Модалка записи -->
 <div class="modal" id="eventModal">
   <div class="sheet">
@@ -525,7 +539,59 @@
 </div>
 
 <script>
+
+
+
+
 /* ===== helpers ===== */
+
+function startOfDay(d){ const t=new Date(d); t.setHours(0,0,0,0); return t; }
+function nextBirthdayDate(birthStr){
+  if(!birthStr) return null;
+  const [y,m,d] = birthStr.split('-').map(Number);
+  if(!y||!m||!d) return null;
+  const today = startOfDay(new Date());
+  let bd = new Date(today.getFullYear(), (m||1)-1, d||1);
+  bd.setHours(0,0,0,0);
+  if (bd < today) bd.setFullYear(bd.getFullYear()+1);
+  return bd;
+}
+function daysBetween(a,b){ return Math.round((startOfDay(a)-startOfDay(b))/86400000); }
+function clientsWithBirthdayIn(days){
+  const today = startOfDay(new Date());
+  return (Store.data.clients||[]).filter(c=>{
+    const bd = nextBirthdayDate(c.birth);
+    return !!bd && daysBetween(bd, today) === days;
+  });
+}
+
+function showBirthdayToast(list){
+  const box = document.getElementById('bdayToast'); if(!box) return;
+  if(!list.length){ box.classList.remove('show'); box.style.display='none'; return; }
+  const names = list.slice(0,3).map(c=>c.fio||'Без имени').join(', ');
+  const more  = list.length>3 ? ` и ещё ${list.length-3}` : '';
+  box.innerHTML = `
+    <div class="row">
+      <div>🎂 Через 3 дня день рождения: <strong>${names}</strong>${more}.</div>
+      <button class="btn" id="toastClose">Закрыть</button>
+    </div>`;
+  box.style.display='block';
+  box.classList.add('show');
+  box.querySelector('#toastClose')?.addEventListener('click',()=>{ box.classList.remove('show'); box.style.display='none'; });
+}
+
+async function maybeShowLocalNotification(list){
+  // локальное системное уведомление (покажется только если вкладка сейчас открыта и даны права)
+  if(!('Notification' in window)) return;
+  if(Notification.permission !== 'granted') return;
+  if(!list.length) return;
+  const names = list.slice(0,3).map(c=>c.fio||'Без имени').join(', ');
+  const more  = list.length>3 ? ` и ещё ${list.length-3}` : '';
+  new Notification('🎂 Скоро день рождения', { body:`Через 3 дня: ${names}${more}.` });
+}
+
+
+
 const _vp = document.querySelector('meta[name="viewport"]');
 function lockZoom(){
   if(!_vp) return;
@@ -1655,7 +1721,18 @@ function renderAll(){
   renderCalendar();renderEventsTable();
   renderItems();renderSubs();renderReport();
   updateDiskStatus(fileHandle?"Автосохранение включено":"Автосохранение в файл выключено")
+  const bdays3 = clientsWithBirthdayIn(3);
+  showBirthdayToast(bdays3);
+  maybeShowLocalNotification(bdays3);
 }
+const notifyBtn = document.getElementById('notifyBtn');
+if (notifyBtn) notifyBtn.onclick = async () => {
+  if(!('Notification' in window)){ alert('Ваш браузер не поддерживает уведомления'); return; }
+  const res = await Notification.requestPermission();
+  if(res === 'granted'){ alert('Уведомления включены ✅'); }
+  else { alert('Разрешите уведомления, чтобы получать напоминания.'); }
+};
+
 function renderEventsTable(){
   const tb = document.querySelector('#eventsTable tbody');
   if (!tb) return;
@@ -1697,11 +1774,59 @@ renderAll();
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js?v=23'); // ← добавили v=12
+  navigator.serviceWorker.register('service-worker.js?v=24'); // ← добавили v=12
 }
 </script>
 
 <script type="module">
+  import { getMessaging, getToken, onMessage, isSupported } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-messaging.js";
+
+  const messagingSupported = await isSupported().catch(()=>false);
+  if (messagingSupported) {
+    const messaging = getMessaging(app);
+
+    async function ensurePushToken(){
+      const reg = await navigator.serviceWorker.ready; // используем ваш SW
+      // ВСТАВЬТЕ свой публичный VAPID из консоли Firebase:
+      const VAPID_PUBLIC_KEY = "BJuDsEoNQCJUAK5exx85Iv0an83iqtVMfHYJ6acbR3CIgyq1JM8EeJu8ZPlu-wI85OrTRwbYZjNtzNFks-g-25s";
+      const token = await getToken(messaging, { vapidKey: VAPID_PUBLIC_KEY, serviceWorkerRegistration: reg });
+      if (!token) throw new Error('Не удалось получить FCM токен');
+
+      const { getFirestore, doc, setDoc } =
+        await import("https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js");
+      const db = (await import("https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js")).getFirestore(app);
+
+      // Сохраним токен в подколлекции студии: studios/{id}/tokens/{token}
+      await setDoc(doc(db, 'studios', STUDIO_ID, 'tokens', token), {
+        token,
+        ua: navigator.userAgent,
+        createdAt: Date.now()
+      });
+      console.log('FCM токен сохранён');
+      return token;
+    }
+
+    // Кнопка из шапки активирует и push:
+    const btn = document.getElementById('notifyBtn');
+    if (btn) btn.addEventListener('click', async ()=>{
+      try{
+        if (Notification.permission !== 'granted') {
+          const p = await Notification.requestPermission();
+          if (p !== 'granted') return;
+        }
+        await ensurePushToken();
+        alert('Push-уведомления включены ✅');
+      }catch(e){ console.error(e); alert('Не удалось включить push: '+e.message); }
+    });
+
+    // Уведомления, полученные при открытом сайте:
+    onMessage(messaging, (payload)=>{
+      console.log('FCM foreground message:', payload);
+      const n = payload.notification;
+      if (n) new Notification(n.title || 'Уведомление', { body: n.body || '' });
+    });
+  }
+
   import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
   const firebaseConfig = {
     apiKey: "AIzaSyCYaKdFnRC8yJKGhRvKfay9lW0dWIjvlJA",

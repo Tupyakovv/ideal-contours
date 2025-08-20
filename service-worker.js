@@ -1,4 +1,4 @@
-const CACHE = 'ideal-contours-v23'; // ↑ новая версия
+const CACHE = 'ideal-contours-v24'; // ↑ новая версия
 const ASSETS = [
   './',
   './index.html',
@@ -6,6 +6,34 @@ const ASSETS = [
   './icons/icon-192.png',
   './icons/icon-512.png',
 ];
+
+
+// --- PUSH: показать уведомление из payload ---
+self.addEventListener('push', (event)=>{
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch(e){}
+  const title = (data.notification && data.notification.title) || data.title || 'Напоминание';
+  const options = {
+    body:  (data.notification && data.notification.body)  || data.body  || '',
+    icon:  '/icons/icon-192.png',
+    badge: '/icons/badge-72.png',
+    data:  data.data || {}
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// --- клик по уведомлению: открываем/фокусируем приложение ---
+self.addEventListener('notificationclick', (event)=>{
+  event.notification.close();
+  event.waitUntil(
+    (async ()=>{
+      const all = await clients.matchAll({ type:'window', includeUncontrolled:true });
+      if (all.length) return all[0].focus();
+      return clients.openWindow('/');
+    })()
+  );
+});
+
 
 // навигационные запросы (HTML) — всегда network-first, чтобы не залип старый index.html
 self.addEventListener('fetch', (e) => {
