@@ -1893,7 +1893,15 @@ if ('serviceWorker' in navigator) {
 
 <script type="module">
   import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
-  const firebaseConfig = { /* твой конфиг как есть */ };
+  const firebaseConfig = {
+    apiKey: "AIzaSyCYaKdFnRC8yJKGhRvKfay9lW0dWIjvlJA",
+    authDomain: "ideal-contours.firebaseapp.com",
+    projectId: "ideal-contours",
+    storageBucket: "ideal-contours.firebasestorage.app",
+    messagingSenderId: "199754637826",
+    appId: "1:199754637826:web:14821729e21fb274017d1b",
+    measurementId: "G-SG047L9MZ5"
+  };
   const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
   import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
@@ -2047,3 +2055,4 @@ if ('serviceWorker' in navigator) {
 
 </body>
 </html>
+
