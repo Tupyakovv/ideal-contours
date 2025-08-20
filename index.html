@@ -1891,11 +1891,63 @@ renderAll();
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js?v=25'); // ← добавили v=12
+  navigator.serviceWorker.register('service-worker.js?v=26'); // ← добавили v=12
 }
 </script>
 
 <script type="module">
+  /* 1) Firebase App — СНАЧАЛА */
+  import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCYaKdFnRC8yJKGhRvKfay9lW0dWIjvlJA",
+    authDomain: "ideal-contours.firebaseapp.com",
+    projectId: "ideal-contours",
+    storageBucket: "ideal-contours.firebasestorage.app",
+    messagingSenderId: "199754637826",
+    appId: "1:199754637826:web:14821729e21fb274017d1b",
+    measurementId: "G-SG047L9MZ5"
+  };
+  const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+
+  /* 2) Firestore + cloud API */
+  import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+  const db = getFirestore(app);
+
+  const STUDIO_ID = localStorage.getItem('studioId') || 'ideal-contours';
+  localStorage.setItem('studioId', STUDIO_ID);
+
+  window.debug = { appOptions: () => app.options, studioId: () => STUDIO_ID };
+
+  window.cloud = {
+    async load() {
+      try {
+        const ref = doc(db, 'studios', STUDIO_ID);
+        const snap = await getDoc(ref);
+        if (snap.exists()) {
+          const data = snap.data();
+          // кладём в localStorage и в оперативные данные приложения
+          localStorage.setItem('idealContoursV3', JSON.stringify(data));
+          if (window.Store) { window.Store.data = data; (window.migrateData?.)(); window.renderAll?.(); }
+        }
+      } catch (e) {
+        console.error('Cloud load error', e);
+      }
+    },
+    async save(data) {
+      try {
+        const ref = doc(db, 'studios', STUDIO_ID);
+        await setDoc(ref, data, { merge: false }); // полностью заменяем документ
+      } catch (e) {
+        console.error('Cloud save error', e);
+      }
+    }
+  };
+
+  // подгружаем данные из облака при старте
+  window.cloud.load();
+
+  /* 3) Firebase Messaging — ТОЛЬКО ПОСЛЕ app/db */
   import { getMessaging, getToken, onMessage, isSupported } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-messaging.js";
 
   const messagingSupported = await isSupported().catch(()=>false);
@@ -1903,17 +1955,11 @@ if ('serviceWorker' in navigator) {
     const messaging = getMessaging(app);
 
     async function ensurePushToken(){
-      const reg = await navigator.serviceWorker.ready; // используем ваш SW
-      // ВСТАВЬТЕ свой публичный VAPID из консоли Firebase:
+      const reg = await navigator.serviceWorker.ready;
       const VAPID_PUBLIC_KEY = "BJuDsEoNQCJUAK5exx85Iv0an83iqtVMfHYJ6acbR3CIgyq1JM8EeJu8ZPlu-wI85OrTRwbYZjNtzNFks-g-25s";
       const token = await getToken(messaging, { vapidKey: VAPID_PUBLIC_KEY, serviceWorkerRegistration: reg });
       if (!token) throw new Error('Не удалось получить FCM токен');
 
-      const { getFirestore, doc, setDoc } =
-        await import("https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js");
-      const db = (await import("https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js")).getFirestore(app);
-
-      // Сохраним токен в подколлекции студии: studios/{id}/tokens/{token}
       await setDoc(doc(db, 'studios', STUDIO_ID, 'tokens', token), {
         token,
         ua: navigator.userAgent,
@@ -1923,7 +1969,6 @@ if ('serviceWorker' in navigator) {
       return token;
     }
 
-    // Кнопка из шапки активирует и push:
     const btn = document.getElementById('notifyBtn');
     if (btn) btn.addEventListener('click', async ()=>{
       try{
@@ -1936,56 +1981,13 @@ if ('serviceWorker' in navigator) {
       }catch(e){ console.error(e); alert('Не удалось включить push: '+e.message); }
     });
 
-    // Уведомления, полученные при открытом сайте:
     onMessage(messaging, (payload)=>{
       console.log('FCM foreground message:', payload);
       const n = payload.notification;
       if (n) new Notification(n.title || 'Уведомление', { body: n.body || '' });
     });
   }
-
-  import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
-  const firebaseConfig = {
-    apiKey: "AIzaSyCYaKdFnRC8yJKGhRvKfay9lW0dWIjvlJA",
-    authDomain: "ideal-contours.firebaseapp.com",
-    projectId: "ideal-contours",
-    storageBucket: "ideal-contours.firebasestorage.app",
-    messagingSenderId: "199754637826",
-    appId: "1:199754637826:web:14821729e21fb274017d1b",
-    measurementId: "G-SG047L9MZ5"
-  };
-  const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-  const STUDIO_ID = localStorage.getItem('studioId') || 'ideal-contours';
-  localStorage.setItem('studioId', STUDIO_ID);
-
-  window.debug = { appOptions: () => app.options, studioId: () => STUDIO_ID };
-
-  window.cloud = {
-    async load() {
-      try {
-        const { getFirestore, doc, getDoc } =
-          await import("https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js");
-        const db = getFirestore(app);
-        const ref = doc(db, 'studios', STUDIO_ID);
-        const snap = await getDoc(ref);
-        if (snap.exists()) {
-          const data = snap.data();
-          localStorage.setItem('idealContoursV3', JSON.stringify(data));
-          if (window.Store) { window.Store.data = data; migrateData?.(); renderAll(); }
-        }
-      } catch (e) { console.error('Cloud load error', e); }
-    },
-    async save(data) {
-      try {
-        const { getFirestore, doc, setDoc } =
-          await import("https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js");
-        const db = getFirestore(app);
-        const ref = doc(db, 'studios', STUDIO_ID);
-        await setDoc(ref, data, { merge: false });
-      } catch (e) { console.error('Cloud save error', e); }
-    }
-  };
-  window.cloud.load();
 </script>
+
 </body>
 </html>
