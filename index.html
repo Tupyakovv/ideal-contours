@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
   <meta name="theme-color" content="#0e1320">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <link rel="manifest" href="manifest.json">
   <title>IDEAL CONTOURS — CRM · Записи · Склад · Абонементы</title>
   <style>
@@ -264,14 +265,7 @@
   </style>
 </head>
 <body>
-<script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations()
-      .then(rs => rs.forEach(r => r.unregister()))
-      .then(() => caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))))
-      .then(() => console.log('✔ SW и кэши очищены — перезагрузите страницу (Ctrl+Shift+R)'));
-  }
-</script>
+
 <header>
   <h1><span class="brand">IDEAL CONTOURS</span> — CRM · Записи · Склад · Абонементы</h1>
   <div class="actions">
@@ -824,6 +818,7 @@ const Store={
     migrateData();
   },
   save(){
+    this.data.updatedAt = Date.now();
     localStorage.setItem(storeKey, JSON.stringify(this.data));
     renderAll();
     saveToDiskDebounced();
@@ -1891,7 +1886,7 @@ renderAll();
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js?v=26'); // ← добавили v=12
+  navigator.serviceWorker.register('service-worker.js?v=27'); // ← добавили v=12
 }
 </script>
 
@@ -1924,11 +1919,35 @@ if ('serviceWorker' in navigator) {
       try {
         const ref = doc(db, 'studios', STUDIO_ID);
         const snap = await getDoc(ref);
-        if (snap.exists()) {
-          const data = snap.data();
-          // кладём в localStorage и в оперативные данные приложения
-          localStorage.setItem('idealContoursV3', JSON.stringify(data));
-          if (window.Store) { window.Store.data = data; (window.migrateData?.)(); window.renderAll?.(); }
+
+        if (!snap || typeof snap.exists !== 'function' || !snap.exists()) {
+          console.warn('Cloud: документа пока нет — пропускаем.');
+          return;
+        }
+
+        const remote = snap.data?.() || null;
+        if (!remote || typeof remote !== 'object') {
+          console.warn('Cloud: пустые/некорректные данные — пропускаем.');
+          return;
+        }
+
+        // Сравниваем свежесть по updatedAt
+        const localRaw = localStorage.getItem('idealContoursV3');
+        const local = localRaw ? JSON.parse(localRaw) : null;
+        const localIsNewer = (local?.updatedAt || 0) > (remote?.updatedAt || 0);
+
+        if (!localIsNewer) {
+          // подтягиваем удалённое поверх текущего состояния
+          if (window.Store) {
+            window.Store.data = { ...window.Store.data, ...remote };
+            window.migrateData?.();
+            window.Store.save(); // сохранит в localStorage и перерисует
+          } else {
+            localStorage.setItem('idealContoursV3', JSON.stringify(remote));
+            window.renderAll?.();
+          }
+        } else {
+          console.log('Cloud: локальные данные свежeе — не заливаемся из облака.');
         }
       } catch (e) {
         console.error('Cloud load error', e);
@@ -1937,12 +1956,13 @@ if ('serviceWorker' in navigator) {
     async save(data) {
       try {
         const ref = doc(db, 'studios', STUDIO_ID);
-        await setDoc(ref, data, { merge: false }); // полностью заменяем документ
+        await setDoc(ref, data, { merge: false });
       } catch (e) {
         console.error('Cloud save error', e);
       }
     }
   };
+
 
   // подгружаем данные из облака при старте
   window.cloud.load();

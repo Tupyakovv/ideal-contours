@@ -1,4 +1,4 @@
-const CACHE = 'ideal-contours-v26'; // ↑ новая версия
+const CACHE = 'ideal-contours-v27'; // ↑ новая версия
 const ASSETS = [
   './',
   './index.html',
@@ -16,7 +16,7 @@ self.addEventListener('push', (event)=>{
   const options = {
     body:  (data.notification && data.notification.body)  || data.body  || '',
     icon:  '/icons/icon-192.png',
-    badge: '/icons/badge-72.png',
+
     data:  data.data || {}
   };
   event.waitUntil(self.registration.showNotification(title, options));
@@ -29,7 +29,7 @@ self.addEventListener('notificationclick', (event)=>{
     (async ()=>{
       const all = await clients.matchAll({ type:'window', includeUncontrolled:true });
       if (all.length) return all[0].focus();
-      return clients.openWindow('/');
+      return clients.openWindow(self.registration.scope);
     })()
   );
 });
