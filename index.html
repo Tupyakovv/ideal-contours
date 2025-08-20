@@ -1886,109 +1886,144 @@ renderAll();
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js?v=27'); // ← добавили v=12
+  navigator.serviceWorker.register('service-worker.js?v=28'); // ← добавили v=12
 }
 </script>
 
 <script type="module">
-  /* 1) Firebase App — СНАЧАЛА */
   import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyCYaKdFnRC8yJKGhRvKfay9lW0dWIjvlJA",
-    authDomain: "ideal-contours.firebaseapp.com",
-    projectId: "ideal-contours",
-    storageBucket: "ideal-contours.firebasestorage.app",
-    messagingSenderId: "199754637826",
-    appId: "1:199754637826:web:14821729e21fb274017d1b",
-    measurementId: "G-SG047L9MZ5"
-  };
+  const firebaseConfig = { /* твой конфиг как есть */ };
   const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-  /* 2) Firestore + cloud API */
   import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
   const db = getFirestore(app);
 
   const STUDIO_ID = localStorage.getItem('studioId') || 'ideal-contours';
   localStorage.setItem('studioId', STUDIO_ID);
 
-  window.debug = { appOptions: () => app.options, studioId: () => STUDIO_ID };
+  // ---------- SMART MERGE HELPERS ----------
+  const storeKey = 'idealContoursV3';
+
+  const uniq = (arr, key) => {
+    const m = new Map();
+    for (const x of arr || []) m.set(key(x), x);
+    return [...m.values()];
+  };
+
+  const mergeById = (remote = [], local = []) => {
+    const m = new Map();
+    for (const x of remote || []) if (x && x.id) m.set(x.id, x);
+    for (const x of local  || []) if (x && x.id) m.set(x.id, { ...m.get(x.id), ...x });
+    return [...m.values()];
+  };
+
+  const mergePayments = (r = [], l = []) =>
+    uniq([...(r || []), ...(l || [])], p => `${p?.date || ''}|${+p?.amount || 0}`);
+
+  const mergeProducts = (r = [], l = []) =>
+    uniq([...(r || []), ...(l || [])], p => `${p?.name || ''}|${+p?.price || 0}|${+p?.qty || 0}`);
+
+  const mergeClients = (remote = [], local = []) => {
+    const out = new Map();
+    for (const c of remote || []) if (c?.id) out.set(c.id, c);
+    for (const c of local  || []) if (c?.id) {
+      const base = out.get(c.id) || {};
+      const merged = { ...base, ...c };
+
+      // purchases по id
+      const rP = base.purchases || [];
+      const lP = c.purchases   || [];
+      const pIndex = new Map();
+      for (const p of rP) if (p?.id) pIndex.set(p.id, p);
+      for (const p of lP) if (p?.id) {
+        const baseP = pIndex.get(p.id) || {};
+        const mP = { ...baseP, ...p };
+        mP.payments = mergePayments(baseP.payments, p.payments);
+        mP.products = mergeProducts(baseP.products, p.products);
+        pIndex.set(p.id, mP);
+      }
+      merged.purchases = [...pIndex.values()];
+      out.set(c.id, merged);
+    }
+    return [...out.values()];
+  };
+
+  const deepMerge = (remote = {}, local = {}) => {
+    const out = { ...remote, ...local }; // локальные скалярные поля приоритетнее
+    out.clients   = mergeClients(remote.clients, local.clients);
+    out.events    = mergeById(remote.events,  local.events);
+    out.inventory = {
+      items: mergeById(remote.inventory?.items, local.inventory?.items),
+      ops:   mergeById(remote.inventory?.ops,   local.inventory?.ops),
+    };
+    out.catalog = {
+      ...remote.catalog, ...local.catalog,
+      subs: mergeById(remote.catalog?.subs, local.catalog?.subs),
+      platforms: Array.from(new Set([...(remote.catalog?.platforms || []), ...(local.catalog?.platforms || [])])),
+    };
+    return out;
+  };
+  // -----------------------------------------
 
   window.cloud = {
     async load() {
       try {
         const ref = doc(db, 'studios', STUDIO_ID);
         const snap = await getDoc(ref);
-
-        if (!snap || typeof snap.exists !== 'function' || !snap.exists()) {
-          console.warn('Cloud: документа пока нет — пропускаем.');
+        if (!snap.exists()) {
+          console.warn('Cloud: документа пока нет.');
           return;
         }
+        const remote = snap.data() || {};
+        const local = (() => { try { return JSON.parse(localStorage.getItem(storeKey) || '{}'); } catch { return {}; } })();
 
-        const remote = snap.data?.() || null;
-        if (!remote || typeof remote !== 'object') {
-          console.warn('Cloud: пустые/некорректные данные — пропускаем.');
-          return;
-        }
+        // СЛИВАЕМ удалённое с локальным (а не тупо заменяем)
+        const merged = deepMerge(remote, local);
 
-        // Сравниваем свежесть по updatedAt
-        const localRaw = localStorage.getItem('idealContoursV3');
-        const local = localRaw ? JSON.parse(localRaw) : null;
-        const localIsNewer = (local?.updatedAt || 0) > (remote?.updatedAt || 0);
+        // Обновляем локально без немедленного пуша обратно в облако
+        localStorage.setItem(storeKey, JSON.stringify(merged));
+        if (window.Store) window.Store.data = merged;
+        window.renderAll?.();
 
-        if (!localIsNewer) {
-          // подтягиваем удалённое поверх текущего состояния
-          if (window.Store) {
-            window.Store.data = { ...window.Store.data, ...remote };
-            window.migrateData?.();
-            window.Store.save(); // сохранит в localStorage и перерисует
-          } else {
-            localStorage.setItem('idealContoursV3', JSON.stringify(remote));
-            window.renderAll?.();
-          }
-        } else {
-          console.log('Cloud: локальные данные свежeе — не заливаемся из облака.');
-        }
       } catch (e) {
         console.error('Cloud load error', e);
       }
     },
-    async save(data) {
+
+    async save(localData) {
       try {
         const ref = doc(db, 'studios', STUDIO_ID);
-        await setDoc(ref, data, { merge: false });
+        const snap = await getDoc(ref);
+        const remote = snap.exists() ? (snap.data() || {}) : null;
+
+        // СЛИВАЕМ перед записью, чтобы пустое состояние iOS не затирало облако
+        const merged = remote ? deepMerge(remote, localData || {}) : (localData || {});
+        merged.updatedAt = Date.now();
+
+        await setDoc(ref, merged, { merge: false });
       } catch (e) {
         console.error('Cloud save error', e);
       }
     }
   };
 
-
-  // подгружаем данные из облака при старте
+  // Первичная подгрузка из облака
   window.cloud.load();
 
-  /* 3) Firebase Messaging — ТОЛЬКО ПОСЛЕ app/db */
+  // --- твой блок Firebase Messaging ниже оставь без изменений ---
   import { getMessaging, getToken, onMessage, isSupported } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-messaging.js";
-
   const messagingSupported = await isSupported().catch(()=>false);
   if (messagingSupported) {
     const messaging = getMessaging(app);
-
     async function ensurePushToken(){
       const reg = await navigator.serviceWorker.ready;
       const VAPID_PUBLIC_KEY = "BJuDsEoNQCJUAK5exx85Iv0an83iqtVMfHYJ6acbR3CIgyq1JM8EeJu8ZPlu-wI85OrTRwbYZjNtzNFks-g-25s";
       const token = await getToken(messaging, { vapidKey: VAPID_PUBLIC_KEY, serviceWorkerRegistration: reg });
       if (!token) throw new Error('Не удалось получить FCM токен');
-
-      await setDoc(doc(db, 'studios', STUDIO_ID, 'tokens', token), {
-        token,
-        ua: navigator.userAgent,
-        createdAt: Date.now()
-      });
+      await setDoc(doc(db, 'studios', STUDIO_ID, 'tokens', token), { token, ua: navigator.userAgent, createdAt: Date.now() });
       console.log('FCM токен сохранён');
       return token;
     }
-
     const btn = document.getElementById('notifyBtn');
     if (btn) btn.addEventListener('click', async ()=>{
       try{
@@ -2000,7 +2035,6 @@ if ('serviceWorker' in navigator) {
         alert('Push-уведомления включены ✅');
       }catch(e){ console.error(e); alert('Не удалось включить push: '+e.message); }
     });
-
     onMessage(messaging, (payload)=>{
       console.log('FCM foreground message:', payload);
       const n = payload.notification;
@@ -2008,6 +2042,7 @@ if ('serviceWorker' in navigator) {
     });
   }
 </script>
+
 
 </body>
 </html>
