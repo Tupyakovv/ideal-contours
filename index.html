@@ -828,7 +828,7 @@ const Store={
   async import(file){const text=await file.text();try{const data=JSON.parse(text);if(!data.clients||!data.events||!data.inventory||!data.catalog)throw new Error("Неверный файл");this.data=data;migrateData();this.save()}catch(e){alert("Ошибка импорта: "+e.message)}},
   clear(){if(confirm("Удалить все данные?")){localStorage.removeItem(storeKey);this.data={clients:[],events:[],inventory:{items:[],ops:[]},catalog:{subs:[],platforms:this.data.catalog.platforms},version:VERSION};seedSubs();renderAll()}}
 };
-
+window.Store = Store;
 function seedSubs(){
   const list=[
     ["Индивидуальный 12 сеансов",12,"individual",18000],["Индивидуальный 15 сеансов",15,"individual",21000],
@@ -1837,6 +1837,7 @@ function renderAll(){
   updateDiskStatus(fileHandle?"Автосохранение включено":"Автосохранение в файл выключено")
   showBirthdaysOncePerDay();
 }
+window.renderAll = renderAll;
 const notifyBtn = document.getElementById('notifyBtn');
 if (notifyBtn) notifyBtn.onclick = async () => {
   if(!('Notification' in window)){ alert('Ваш браузер не поддерживает уведомления'); return; }
@@ -1886,7 +1887,7 @@ renderAll();
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js?v=28'); // ← добавили v=12
+  navigator.serviceWorker.register('service-worker.js?v=29'); // ← добавили v=12
 }
 </script>
 
