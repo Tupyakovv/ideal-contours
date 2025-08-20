@@ -9,7 +9,14 @@
   <link rel="manifest" href="manifest.json">
   <title>IDEAL CONTOURS — CRM · Записи · Склад · Абонементы</title>
   <style>
-
+.applock{
+  position:fixed; inset:0; display:none;
+  align-items:center; justify-content:center;
+  background:rgba(3,6,15,.6);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  z-index:80;
+}
+.applock.show{ display:flex }
   /* Toast для напоминаний */
   .toast{
     position:fixed; right:16px; bottom:16px; z-index:60;
@@ -83,13 +90,11 @@
     /* Вторая строка (Отчёты / + Продажа): липкая и автоскрываемая */
     .action-tabs{
       display:flex; gap:8px; padding:8px;
-      position:sticky; top:0; z-index:35;
+      position:static; top:auto; z-index:35;
       background:rgba(12,13,20,0.7);
-      backdrop-filter:saturate(140%) blur(10px);
-      transition:transform .25s ease;
-      border-bottom:1px solid var(--border);
+
     }
-    .action-tabs.hide{ transform:translateY(-140%); }
+    /*.action-tabs.hide{ transform:translateY(-140%); }
 
     /* Кнопки в шапке на телефоне — поменьше */
     @media (max-width:900px){
@@ -799,14 +804,15 @@ function closeEventModal(){
 
 let silentSaveTimer=null;
 function saveSilentlyDebounced(){
+  if (window.isAppLocked && window.isAppLocked()) return;
   clearTimeout(silentSaveTimer);
   silentSaveTimer = setTimeout(()=>{
-    // сохраняем без перерисовки интерфейса
     localStorage.setItem(storeKey, JSON.stringify(Store.data));
     saveToDiskDebounced();
     if (window.cloud?.save) window.cloud.save(Store.data).catch(console.warn);
   }, 300);
 }
+
 
 /* ===== Store ===== */
 const VERSION=4; const storeKey="idealContoursV3";
@@ -817,7 +823,8 @@ const Store={
     if(!this.data.catalog.subs?.length) seedSubs();
     migrateData();
   },
-  save(){
+  save(opts = {}) {
+    if (window.isAppLocked && window.isAppLocked()) return; // блокируем изменения
     this.data.updatedAt = Date.now();
     localStorage.setItem(storeKey, JSON.stringify(this.data));
     renderAll();
@@ -1887,7 +1894,7 @@ renderAll();
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js?v=29'); // ← добавили v=12
+  navigator.serviceWorker.register('service-worker.js?v=31'); // ← добавили v=12
 }
 </script>
 
@@ -1910,116 +1917,78 @@ if ('serviceWorker' in navigator) {
   const STUDIO_ID = localStorage.getItem('studioId') || 'ideal-contours';
   localStorage.setItem('studioId', STUDIO_ID);
 
-  // ---------- SMART MERGE HELPERS ----------
+  // ключ стора
   const storeKey = 'idealContoursV3';
 
-  const uniq = (arr, key) => {
-    const m = new Map();
-    for (const x of arr || []) m.set(key(x), x);
-    return [...m.values()];
-  };
+  // ---- БЛОКИРОВКА UI ПОКА ТЯНЕМ ИЗ ОБЛАКА ----
+  window.__appLocked = false;
+  function setAppLocked(on, msg = 'Загрузка данных…'){
+    const el = document.getElementById('appLock');
+    if (!el) return;
+    el.querySelector('[data-msg]').textContent = msg;
+    el.classList.toggle('show', !!on);
+    window.__appLocked = !!on;
+  }
+  function isAppLocked(){ return !!window.__appLocked; }
+  window.isAppLocked = isAppLocked;
 
-  const mergeById = (remote = [], local = []) => {
-    const m = new Map();
-    for (const x of remote || []) if (x && x.id) m.set(x.id, x);
-    for (const x of local  || []) if (x && x.id) m.set(x.id, { ...m.get(x.id), ...x });
-    return [...m.values()];
-  };
-
-  const mergePayments = (r = [], l = []) =>
-    uniq([...(r || []), ...(l || [])], p => `${p?.date || ''}|${+p?.amount || 0}`);
-
-  const mergeProducts = (r = [], l = []) =>
-    uniq([...(r || []), ...(l || [])], p => `${p?.name || ''}|${+p?.price || 0}|${+p?.qty || 0}`);
-
-  const mergeClients = (remote = [], local = []) => {
-    const out = new Map();
-    for (const c of remote || []) if (c?.id) out.set(c.id, c);
-    for (const c of local  || []) if (c?.id) {
-      const base = out.get(c.id) || {};
-      const merged = { ...base, ...c };
-
-      // purchases по id
-      const rP = base.purchases || [];
-      const lP = c.purchases   || [];
-      const pIndex = new Map();
-      for (const p of rP) if (p?.id) pIndex.set(p.id, p);
-      for (const p of lP) if (p?.id) {
-        const baseP = pIndex.get(p.id) || {};
-        const mP = { ...baseP, ...p };
-        mP.payments = mergePayments(baseP.payments, p.payments);
-        mP.products = mergeProducts(baseP.products, p.products);
-        pIndex.set(p.id, mP);
-      }
-      merged.purchases = [...pIndex.values()];
-      out.set(c.id, merged);
-    }
-    return [...out.values()];
-  };
-
-  const deepMerge = (remote = {}, local = {}) => {
-    const out = { ...remote, ...local }; // локальные скалярные поля приоритетнее
-    out.clients   = mergeClients(remote.clients, local.clients);
-    out.events    = mergeById(remote.events,  local.events);
-    out.inventory = {
-      items: mergeById(remote.inventory?.items, local.inventory?.items),
-      ops:   mergeById(remote.inventory?.ops,   local.inventory?.ops),
-    };
-    out.catalog = {
-      ...remote.catalog, ...local.catalog,
-      subs: mergeById(remote.catalog?.subs, local.catalog?.subs),
-      platforms: Array.from(new Set([...(remote.catalog?.platforms || []), ...(local.catalog?.platforms || [])])),
-    };
-    return out;
-  };
-  // -----------------------------------------
-
+  // ---- Простая модель: init-из-облака, дальше только overwrite ----
   window.cloud = {
-    async load() {
-      try {
-        const ref = doc(db, 'studios', STUDIO_ID);
-        const snap = await getDoc(ref);
-        if (!snap.exists()) {
-          console.warn('Cloud: документа пока нет.');
-          return;
-        }
-        const remote = snap.data() || {};
-        const local = (() => { try { return JSON.parse(localStorage.getItem(storeKey) || '{}'); } catch { return {}; } })();
-
-        // СЛИВАЕМ удалённое с локальным (а не тупо заменяем)
-        const merged = deepMerge(remote, local);
-
-        // Обновляем локально без немедленного пуша обратно в облако
-        localStorage.setItem(storeKey, JSON.stringify(merged));
-        if (window.Store) window.Store.data = merged;
-        window.renderAll?.();
-
-      } catch (e) {
-        console.error('Cloud load error', e);
-      }
-    },
-
-    async save(localData) {
-      try {
+    /**
+     * Загружает из облака.
+     * force: true — всегда перезаписывает локальные данные удалёнными.
+     * force: false — перезаписывает только если локально пусто.
+     */
+    async load({ force = false } = {}) {
+      try{
         const ref = doc(db, 'studios', STUDIO_ID);
         const snap = await getDoc(ref);
         const remote = snap.exists() ? (snap.data() || {}) : null;
 
-        // СЛИВАЕМ перед записью, чтобы пустое состояние iOS не затирало облако
-        const merged = remote ? deepMerge(remote, localData || {}) : (localData || {});
-        merged.updatedAt = Date.now();
+        // есть ли локальные данные?
+        let localHasData = false;
+        try{
+          const local = JSON.parse(localStorage.getItem(storeKey) || '{}');
+          localHasData = !!(local.clients?.length || local.events?.length || local.inventory?.items?.length);
+        }catch{}
 
-        await setDoc(ref, merged, { merge: false });
-      } catch (e) {
+        if ((force || !localHasData) && remote){
+          localStorage.setItem(storeKey, JSON.stringify(remote));
+          if (window.Store) window.Store.data = remote;
+          window.renderAll?.();
+        }
+      }catch(e){
+        console.error('Cloud load error', e);
+      }
+    },
+
+    /** Перезаписывает документ в Firestore целиком (без merge). */
+    async save(localData) {
+      try{
+        const ref = doc(db, 'studios', STUDIO_ID);
+        const payload = { ...(localData || {}), updatedAt: Date.now() };
+        await setDoc(ref, payload, { merge: false }); // ← ВАЖНО: overwrite
+      }catch(e){
         console.error('Cloud save error', e);
       }
     }
   };
 
-  // Первичная подгрузка из облака
-  window.cloud.load();
+  // --- Первичная подгрузка ---
+  (async ()=>{
+    // если локально пусто — блокируем до подгрузки
+    let localHasData = false;
+    try{
+      const local = JSON.parse(localStorage.getItem(storeKey) || '{}');
+      localHasData = !!(local.clients?.length || local.events?.length || local.inventory?.items?.length);
+    }catch{}
 
-  // --- твой блок Firebase Messaging ниже оставь без изменений ---
+    if (!localHasData) setAppLocked(true, 'Загрузка данных из облака…');
+    await window.cloud.load({ force:false });
+    setAppLocked(false);
+  })();
+
+  // --- (дальше оставьте ваш блок Firebase Messaging без изменений) ---
   import { getMessaging, getToken, onMessage, isSupported } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-messaging.js";
   const messagingSupported = await isSupported().catch(()=>false);
   if (messagingSupported) {
@@ -2053,6 +2022,11 @@ if ('serviceWorker' in navigator) {
 </script>
 
 
+<div id="appLock" class="applock">
+  <div class="card"><div class="content">
+    <b data-msg>Загрузка данных…</b>
+    <div class="muted">Пожалуйста, подождите</div>
+  </div></div>
+</div>
 </body>
 </html>
-
