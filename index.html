@@ -1946,7 +1946,7 @@ document.getElementById('repMonth').value=new Date().toISOString().slice(0,7);
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js?v=35'); // ← добавили v=12
+  navigator.serviceWorker.register('service-worker.js?v=36'); // ← добавили v=36
 }
 </script>
 
@@ -1996,10 +1996,9 @@ if ('serviceWorker' in navigator) {
 
   // Пинг для проверки токена
   async function yandexPing(){
-    // проверяем доступ именно к папке приложения
-    const url = 'https://cloud-api.yandex.net/v1/disk/resources?path=' + encodeURIComponent('app:/');
-    const res = await fetch(url, { headers: { Authorization: 'OAuth ' + YD_TOKEN }});
-    return res.ok; // 200 — окей; 403/401 — нет доступа/плохой токен
+     const url = 'https://cloud-api.yandex.net/v1/disk/resources?path=' + encodeURIComponent('app:/');
+     const res = await fetch(url, { headers: { Authorization: 'OAuth ' + YD_TOKEN }});
+     return res.ok; // 200 — токен годен для app:/
    }
 
   // Диалог ввода токена (без бесконечных всплытий)
