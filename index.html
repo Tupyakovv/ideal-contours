@@ -275,8 +275,7 @@
   <h1><span class="brand">IDEAL CONTOURS</span> — CRM · Записи · Склад · Абонементы</h1>
   <div class="actions">
     <button id="notifyBtn" class="btn">🔔 Уведомления</button>
-    <button id="connectDirBtn" class="btn">Папка данных</button>
-    <button id="saveNowBtn" class="btn">Сохранить в файл</button>
+    <button id="saveNowBtn" class="btn">Сохранить на Яндекс.Диск</button>
     <label class="btn ghost" style="margin:0">Импорт JSON <input id="importFile" type="file" accept=".json" style="display:none"/></label>
     <button id="exportBtn" class="btn">Экспорт JSON</button>
     <button id="clearBtn" class="btn danger">Очистить всё</button>
@@ -451,9 +450,10 @@
   </section>
 </div>
 
-<footer>Данные сохраняются локально и (при подключении) в файл <strong>ideal_contours_data.json</strong>. Версия 4.0</footer>
+<footer>Данные сохраняются локально и на Яндекс Диск (при подключении) в файл <strong>ideal_contours_data.json</strong>. Версия 4.0</footer>
 
 <div id="bdayToast" class="toast" role="status" aria-live="polite"></div>
+<div id="saveToast" class="toast" role="status" aria-live="polite"></div>
 
 <!-- Модалка записи -->
 <div class="modal" id="eventModal">
@@ -550,9 +550,31 @@
 <script>
 
 
-
+/* === disk status (must exist before any render) === */
+window.__yandexStatus = '';
+function updateDiskStatus(t){
+  const el = document.getElementById('diskStatus');
+  if (el) el.textContent = t;
+  window.__yandexStatus = t;
+}
 
 /* ===== helpers ===== */
+
+function showMiniToast(msg, timeout=2000){
+  const box = document.getElementById('saveToast');
+  if (!box) return;
+  box.innerHTML = `<div class="row">${msg}</div>`;
+  box.style.display = 'block';
+  // даём CSS-анимации стартовать
+  requestAnimationFrame(()=> box.classList.add('show'));
+  // авто-закрытие
+  clearTimeout(box.__t);
+  box.__t = setTimeout(()=>{
+    box.classList.remove('show');
+    box.style.display = 'none';
+  }, timeout);
+}
+
 
 function previousBirthdayDate(birthStr){
   if(!birthStr) return null;
@@ -802,16 +824,7 @@ function closeEventModal(){
   unlockZoom();                               // возвращаем зум
 }
 
-let silentSaveTimer=null;
-function saveSilentlyDebounced(){
-  if (window.isAppLocked && window.isAppLocked()) return;
-  clearTimeout(silentSaveTimer);
-  silentSaveTimer = setTimeout(()=>{
-    localStorage.setItem(storeKey, JSON.stringify(Store.data));
-    saveToDiskDebounced();
-    if (window.cloud?.save) window.cloud.save(Store.data).catch(console.warn);
-  }, 300);
-}
+
 
 
 /* ===== Store ===== */
@@ -828,8 +841,8 @@ const Store={
     this.data.updatedAt = Date.now();
     localStorage.setItem(storeKey, JSON.stringify(this.data));
     renderAll();
-    saveToDiskDebounced();
-    if (window.cloud?.save) window.cloud.save(this.data).catch(console.warn);
+    /* ЗАМЕНА: сохраняем в Яндекс.Диск (дебаунс) */
+    saveToYandexDebounced();
   },
   export(){const blob=new Blob([JSON.stringify(this.data,null,2)],{type:"application/json"});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download="ideal_contours_data.json";a.click();URL.revokeObjectURL(a.href)},
   async import(file){const text=await file.text();try{const data=JSON.parse(text);if(!data.clients||!data.events||!data.inventory||!data.catalog)throw new Error("Неверный файл");this.data=data;migrateData();this.save()}catch(e){alert("Ошибка импорта: "+e.message)}},
@@ -1644,6 +1657,8 @@ function renderSubs(){
 }
 
 /* ===== Reports ===== */
+
+
 function calcMonthReport(ym){
   const [Y,M]=ym.split('-').map(Number);
   const start=new Date(Y,M-1,1);const end=new Date(Y,M,1);
@@ -1663,17 +1678,7 @@ function renderReport(){
   document.getElementById('repEvents').textContent=r.eventsCount
 }
 
-/* ===== File System Access ===== */
-let dirHandle=null,fileHandle=null,saveTimer=null;
-function isFSA(){return'showDirectoryPicker'in window}
-async function connectDir(){
-  if(!isFSA()){alert("Ваш браузер не поддерживает прямое сохранение в папку. Используйте Экспорт/Импорт JSON.");return}
-  try{dirHandle=await window.showDirectoryPicker();fileHandle=await dirHandle.getFileHandle('ideal_contours_data.json',{create:true});await saveToDisk();updateDiskStatus("Папка подключена")}
-  catch(e){console.warn(e);updateDiskStatus("Папка не подключена")}
-}
-async function saveToDisk(){if(!fileHandle)return;const w=await fileHandle.createWritable();await w.write(JSON.stringify(Store.data,null,2));await w.close()}
-function saveToDiskDebounced(){if(!fileHandle)return;clearTimeout(saveTimer);saveTimer=setTimeout(saveToDisk,400)}
-function updateDiskStatus(t){const el=document.getElementById('diskStatus');if(el)el.textContent=t}
+
 
 /* ===== New Sale modal ===== */
 function toggleNewClientBox(){
@@ -1771,6 +1776,17 @@ document.getElementById('sCreate').onclick=()=>{
   closeSale();
   loadClientForm();renderPurchases();
 };
+let silentSaveTimer=null;
+function saveSilentlyDebounced(){
+  if (window.isAppLocked && window.isAppLocked()) return;
+  clearTimeout(silentSaveTimer);
+  silentSaveTimer = setTimeout(()=>{
+    localStorage.setItem(storeKey, JSON.stringify(Store.data));
+    saveToYandexDebounced();                 // ← только Яндекс
+    // никаких Store.cloud / FSA / Firebase
+  }, 300);
+}
+
 
 /* ===== wiring ===== */
 
@@ -1802,8 +1818,8 @@ window.addEventListener('scroll', () => {
   lastY = st;
 });
 
-document.getElementById('connectDirBtn').onclick=connectDir;
-document.getElementById('saveNowBtn').onclick=saveToDisk;
+
+
 document.getElementById('exportBtn').onclick=()=>Store.export();
 document.getElementById('clearBtn').onclick=()=>Store.clear();
 document.getElementById('importFile').addEventListener('change',e=>{const f=e.target.files?.[0];if(f)Store.import(f)});
@@ -1841,7 +1857,8 @@ function renderAll(){
   renderPurchases();
   renderCalendar();renderEventsTable();
   renderItems();renderSubs();renderReport();
-  updateDiskStatus(fileHandle?"Автосохранение включено":"Автосохранение в файл выключено")
+  /* ЗАМЕНА строки статуса: */
+  updateDiskStatus(window.__yandexStatus || "Яндекс.Диск: готово");
   showBirthdaysOncePerDay();
 }
 window.renderAll = renderAll;
@@ -1852,6 +1869,18 @@ if (notifyBtn) notifyBtn.onclick = async () => {
   if(res === 'granted'){ alert('Уведомления включены ✅'); }
   else { alert('Разрешите уведомления, чтобы получать напоминания.'); }
 };
+
+const saveNowBtn = document.getElementById('saveNowBtn');
+if (saveNowBtn) {
+  saveNowBtn.onclick = async () => {
+    try{
+      await window.yandex.save(Store.data);
+      showMiniToast('Сохранено на Яндекс.Диск ✓');
+    }catch(e){
+      showMiniToast('Не удалось сохранить на Яндекс.Диск', 3500);
+    }
+  };
+}
 
 function renderEventsTable(){
   const tb = document.querySelector('#eventsTable tbody');
@@ -1892,134 +1921,185 @@ Store.load();
 renderAll();
 </script>
 
+
+
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('service-worker.js?v=31'); // ← добавили v=12
 }
 </script>
 
-<script type="module">
-  import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
-  const firebaseConfig = {
-    apiKey: "AIzaSyCYaKdFnRC8yJKGhRvKfay9lW0dWIjvlJA",
-    authDomain: "ideal-contours.firebaseapp.com",
-    projectId: "ideal-contours",
-    storageBucket: "ideal-contours.firebasestorage.app",
-    messagingSenderId: "199754637826",
-    appId: "1:199754637826:web:14821729e21fb274017d1b",
-    measurementId: "G-SG047L9MZ5"
-  };
-  const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+<!-- ДОБАВИТЬ: Яндекс.Диск -->
+<script>
+  /* ===== Яндекс.Диск: только папка приложения (app:/) ===== */
 
-  import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-  const db = getFirestore(app);
-
-  const STUDIO_ID = localStorage.getItem('studioId') || 'ideal-contours';
-  localStorage.setItem('studioId', STUDIO_ID);
-
-  // ключ стора
-  const storeKey = 'idealContoursV3';
-
-  // ---- БЛОКИРОВКА UI ПОКА ТЯНЕМ ИЗ ОБЛАКА ----
-  window.__appLocked = false;
-  function setAppLocked(on, msg = 'Загрузка данных…'){
-    const el = document.getElementById('appLock');
-    if (!el) return;
-    el.querySelector('[data-msg]').textContent = msg;
-    el.classList.toggle('show', !!on);
-    window.__appLocked = !!on;
+  // Плашка статуса в UI
+  function updateDiskStatus(t){
+    const el = document.getElementById('diskStatus');
+    if (el) { el.textContent = t; el.style.cursor = 'pointer'; }
   }
-  function isAppLocked(){ return !!window.__appLocked; }
-  window.isAppLocked = isAppLocked;
 
-  // ---- Простая модель: init-из-облака, дальше только overwrite ----
-  window.cloud = {
-    /**
-     * Загружает из облака.
-     * force: true — всегда перезаписывает локальные данные удалёнными.
-     * force: false — перезаписывает только если локально пусто.
-     */
-    async load({ force = false } = {}) {
+
+
+
+  // Токен: берём из localStorage, если нет — используем ваш дефолт
+  const YD_TOKEN_KEY = 'yandexToken';
+  let YD_TOKEN = localStorage.getItem(YD_TOKEN_KEY) || 'y0__xD667mOBxiblTog7uXerBTG-yeyNhbbfzymckurjDck8N2hzQ';
+  function setYandexToken(t){
+    YD_TOKEN = (t || '').trim();
+    localStorage.setItem(YD_TOKEN_KEY, YD_TOKEN);
+  }
+
+  // ВАЖНО: путь в ПАПКЕ ПРИЛОЖЕНИЯ
+  const YD_PATH = 'app:/ideal_contours_data.json';
+
+  // Вспомогательные функции: получаем одноразовые ссылки
+  async function yandexGetDownloadUrl(){
+    const url = 'https://cloud-api.yandex.net/v1/disk/resources/download?path=' + encodeURIComponent(YD_PATH);
+    const res = await fetch(url, { headers: { Authorization: 'OAuth ' + YD_TOKEN }});
+    if (res.status === 401 || res.status === 403) throw new Error('AUTH'); // нет прав/плохой токен
+    if (res.status === 404) return null;                                   // файла ещё нет
+    if (!res.ok) throw new Error('download link ' + res.status);
+    return (await res.json()).href;
+  }
+
+  async function yandexGetUploadUrl(){
+    const url = 'https://cloud-api.yandex.net/v1/disk/resources/upload?overwrite=true&path=' + encodeURIComponent(YD_PATH);
+    const res = await fetch(url, { headers: { Authorization: 'OAuth ' + YD_TOKEN }});
+    if (res.status === 401 || res.status === 403) throw new Error('AUTH');
+    if (!res.ok) throw new Error('upload link ' + res.status);
+    return (await res.json()).href;
+  }
+
+  // Пинг для проверки токена
+  async function yandexPing(){
+    const res = await fetch('https://cloud-api.yandex.net/v1/disk/', {
+      headers: { Authorization: 'OAuth ' + YD_TOKEN }
+    });
+    return res.ok;
+  }
+
+  // Диалог ввода токена (без бесконечных всплытий)
+  let __ydPromptedOnce = false;
+  let __ydAuthMutedUntil = 0;
+  const __YD_AUTH_MUTE_MS = 60 * 1000;
+
+  async function askToken(){
+    const now = Date.now();
+    if (__ydPromptedOnce && now < __ydAuthMutedUntil) return;
+
+    const t = prompt('Введите OAuth-токен Яндекс.Диска (доступ только к папке приложения):', YD_TOKEN || '');
+    if (!t) {
+      __ydPromptedOnce = true;
+      __ydAuthMutedUntil = now + __YD_AUTH_MUTE_MS;
+      updateDiskStatus('Яндекс.Диск: токен не введён');
+      return;
+    }
+    const old = YD_TOKEN; YD_TOKEN = t.trim();
+
+    try{
+      updateDiskStatus('Яндекс.Диск: проверка токена…');
+      const ok = await yandexPing();
+      if (!ok) throw new Error('bad token');
+
+      setYandexToken(YD_TOKEN);
+      updateDiskStatus('Яндекс.Диск: токен сохранён ✓');
+      __ydPromptedOnce = true;
+      __ydAuthMutedUntil = 0;
+
+      // Сразу сохраним текущие данные
+      await window.yandex.save(Store.data);
+    }catch(e){
+      YD_TOKEN = old;
+      __ydPromptedOnce = true;
+      __ydAuthMutedUntil = now + __YD_AUTH_MUTE_MS;
+      alert('Токен недействителен или без доступа к папке приложения.');
+      updateDiskStatus('Яндекс.Диск: недействительный токен');
+    }
+  }
+
+  // Клик по статусу — ручной ввод/смена токена
+  const diskStatusEl = document.getElementById('diskStatus');
+  if (diskStatusEl){
+    diskStatusEl.title = 'Нажмите, чтобы ввести/сменить токен Яндекс.Диска';
+    diskStatusEl.addEventListener('click', askToken);
+  }
+
+  // API загрузки/сохранения
+  window.yandex = {
+    async load({ forceLocalOverride = true } = {}){
+      updateDiskStatus('Яндекс.Диск: загрузка…');
       try{
-        const ref = doc(db, 'studios', STUDIO_ID);
-        const snap = await getDoc(ref);
-        const remote = snap.exists() ? (snap.data() || {}) : null;
-
-        // есть ли локальные данные?
-        let localHasData = false;
-        try{
-          const local = JSON.parse(localStorage.getItem(storeKey) || '{}');
-          localHasData = !!(local.clients?.length || local.events?.length || local.inventory?.items?.length);
-        }catch{}
-
-        if ((force || !localHasData) && remote){
-          localStorage.setItem(storeKey, JSON.stringify(remote));
-          if (window.Store) window.Store.data = remote;
-          window.renderAll?.();
+        const href = await yandexGetDownloadUrl();
+        if (!href){
+          updateDiskStatus('Яндекс.Диск: файл ещё не создан');
+          return null;
         }
+        const fileRes = await fetch(href);
+        if (!fileRes.ok) throw new Error('download ' + fileRes.status);
+        const json = await fileRes.json();
+        if (forceLocalOverride){
+          localStorage.setItem(storeKey, JSON.stringify(json));
+          if (window.Store) window.Store.data = json;
+        }
+        updateDiskStatus('Яндекс.Диск: загружено ✓');
+        return json;
       }catch(e){
-        console.error('Cloud load error', e);
+        if (e.message === 'AUTH'){
+          updateDiskStatus('Яндекс.Диск: ошибка авторизации — нажмите сюда, чтобы ввести токен');
+          return null;
+        }
+        console.error('Yandex load error', e);
+        updateDiskStatus('Яндекс.Диск: ошибка загрузки');
+        return null;
       }
     },
 
-    /** Перезаписывает документ в Firestore целиком (без merge). */
-    async save(localData) {
+    async save(localData){
       try{
-        const ref = doc(db, 'studios', STUDIO_ID);
-        const payload = { ...(localData || {}), updatedAt: Date.now() };
-        await setDoc(ref, payload, { merge: false }); // ← ВАЖНО: overwrite
+        const href = await yandexGetUploadUrl();
+        const put = await fetch(href, { method:'PUT', body: JSON.stringify(localData ?? Store.data) });
+        if (put.status === 401 || put.status === 403) throw new Error('AUTH');
+        if (!put.ok) throw new Error('upload ' + put.status);
+        updateDiskStatus('Яндекс.Диск: сохранено ✓');
       }catch(e){
-        console.error('Cloud save error', e);
+        if (e.message === 'AUTH'){
+          updateDiskStatus('Яндекс.Диск: ошибка авторизации — нажмите сюда, чтобы ввести токен');
+          return;
+        }
+        console.error('Yandex save error', e);
+        updateDiskStatus('Яндекс.Диск: ошибка сохранения');
       }
     }
   };
 
-  // --- Первичная подгрузка ---
+  // Дебаунс-автосохранение только в Яндекс
+  let saveYdTimer=null;
+  function saveToYandexDebounced(){
+    clearTimeout(saveYdTimer);
+    saveYdTimer = setTimeout(()=> window.yandex.save(Store.data), 400);
+  }
+
+
+
+  // Первичная подгрузка с Яндекс.Диска на новых устройствах
   (async ()=>{
-    // если локально пусто — блокируем до подгрузки
     let localHasData = false;
     try{
       const local = JSON.parse(localStorage.getItem(storeKey) || '{}');
       localHasData = !!(local.clients?.length || local.events?.length || local.inventory?.items?.length);
     }catch{}
-
-    if (!localHasData) setAppLocked(true, 'Загрузка данных из облака…');
-    await window.cloud.load({ force:false });
-    setAppLocked(false);
+    if (!localHasData && window.setAppLocked) setAppLocked(true, 'Загрузка данных из Яндекс.Диска…');
+    const remote = await window.yandex.load({ forceLocalOverride: !localHasData });
+    if (!localHasData && !remote){
+      // создадим файл в приложении, чтобы в следующий раз смогли загрузить
+      try{ await window.yandex.save(Store.data); }catch{}
+    }
+    if (window.setAppLocked) setAppLocked(false);
   })();
 
-  // --- (дальше оставьте ваш блок Firebase Messaging без изменений) ---
-  import { getMessaging, getToken, onMessage, isSupported } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-messaging.js";
-  const messagingSupported = await isSupported().catch(()=>false);
-  if (messagingSupported) {
-    const messaging = getMessaging(app);
-    async function ensurePushToken(){
-      const reg = await navigator.serviceWorker.ready;
-      const VAPID_PUBLIC_KEY = "BJuDsEoNQCJUAK5exx85Iv0an83iqtVMfHYJ6acbR3CIgyq1JM8EeJu8ZPlu-wI85OrTRwbYZjNtzNFks-g-25s";
-      const token = await getToken(messaging, { vapidKey: VAPID_PUBLIC_KEY, serviceWorkerRegistration: reg });
-      if (!token) throw new Error('Не удалось получить FCM токен');
-      await setDoc(doc(db, 'studios', STUDIO_ID, 'tokens', token), { token, ua: navigator.userAgent, createdAt: Date.now() });
-      console.log('FCM токен сохранён');
-      return token;
-    }
-    const btn = document.getElementById('notifyBtn');
-    if (btn) btn.addEventListener('click', async ()=>{
-      try{
-        if (Notification.permission !== 'granted') {
-          const p = await Notification.requestPermission();
-          if (p !== 'granted') return;
-        }
-        await ensurePushToken();
-        alert('Push-уведомления включены ✅');
-      }catch(e){ console.error(e); alert('Не удалось включить push: '+e.message); }
-    });
-    onMessage(messaging, (payload)=>{
-      console.log('FCM foreground message:', payload);
-      const n = payload.notification;
-      if (n) new Notification(n.title || 'Уведомление', { body: n.body || '' });
-    });
-  }
 </script>
+<!-- /ДОБАВИТЬ: Яндекс.Диск -->
 
 
 <div id="appLock" class="applock">
