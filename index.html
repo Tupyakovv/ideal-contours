@@ -1888,9 +1888,13 @@ if (notifyBtn) notifyBtn.onclick = async () => {
 };
 
 const saveNowBtn = document.getElementById('saveNowBtn');
-if (saveNowBtn) saveNowBtn.disabled = true; // активируем после первой синхронизации
 if (saveNowBtn) {
+  saveNowBtn.disabled = false; // всегда кликабельна
   saveNowBtn.onclick = async () => {
+    // если нет токена — попросим
+    if (!localStorage.getItem('yandexToken')) {
+      await askToken();
+    }
     try{
       await window.yandex.save(Store.data);
       showMiniToast('Сохранено на Яндекс.Диск ✓');
@@ -1942,18 +1946,20 @@ document.getElementById('repMonth').value=new Date().toISOString().slice(0,7);
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js?v=33'); // ← добавили v=12
+  navigator.serviceWorker.register('service-worker.js?v=34'); // ← добавили v=12
 }
 </script>
 
 <!-- ДОБАВИТЬ: Яндекс.Диск -->
 <script>
   /* ===== Яндекс.Диск: только папка приложения (app:/) ===== */
-
+  // Автозапрос токена при 401/403 и повтор операции
+  const AUTO_PROMPT_TOKEN_ON_AUTH = true;
   // Плашка статуса в UI
   function updateDiskStatus(t){
     const el = document.getElementById('diskStatus');
     if (el) { el.textContent = t; el.style.cursor = 'pointer'; }
+    window.__yandexStatus = t; // ← добавьте эту строку
   }
 
 
@@ -2061,9 +2067,17 @@ if ('serviceWorker' in navigator) {
         }
         updateDiskStatus('Яндекс.Диск: загружено ✓');
         return json;
-      }catch(e){
+      }
+      catch(e){
         if (e.message === 'AUTH'){
-          updateDiskStatus('Яндекс.Диск: ошибка авторизации — нажмите сюда, чтобы ввести токен');
+          updateDiskStatus('Яндекс.Диск: требуется токен');
+          if (AUTO_PROMPT_TOKEN_ON_AUTH) {
+            await askToken(); // попросим токен
+            try {
+              // и сразу повторим попытку загрузки
+              return await window.yandex.load({ forceLocalOverride });
+            } catch {}
+          }
           return null;
         }
         console.error('Yandex load error', e);
@@ -2079,9 +2093,20 @@ if ('serviceWorker' in navigator) {
         if (put.status === 401 || put.status === 403) throw new Error('AUTH');
         if (!put.ok) throw new Error('upload ' + put.status);
         updateDiskStatus('Яндекс.Диск: сохранено ✓');
-      }catch(e){
+      }
+      catch(e){
         if (e.message === 'AUTH'){
-          updateDiskStatus('Яндекс.Диск: ошибка авторизации — нажмите сюда, чтобы ввести токен');
+          updateDiskStatus('Яндекс.Диск: требуется токен');
+          if (AUTO_PROMPT_TOKEN_ON_AUTH) {
+            await askToken();
+            try {
+              // повторим попытку сохранения уже с новым токеном
+              const href = await yandexGetUploadUrl();
+              const put = await fetch(href, { method:'PUT', body: JSON.stringify(localData ?? Store.data) });
+              if (!put.ok) throw new Error('upload ' + put.status);
+              updateDiskStatus('Яндекс.Диск: сохранено ✓');
+            } catch (err) { console.error(err); }
+          }
           return;
         }
         console.error('Yandex save error', e);
@@ -2129,8 +2154,9 @@ if ('serviceWorker' in navigator) {
     } catch (e) {
       console.error('Boot sync error', e);
       updateDiskStatus('Яндекс.Диск: ошибка загрузки');
-      // Даже при ошибке разблокируем UI, но продолжим без автосохранений (firstSyncDone=false)
       if (window.setAppLocked) setAppLocked(false);
+      // ВАЖНО: разрешаем локальный режим, чтобы всё работало без облака
+      window.__firstSyncDone = true;
       try { renderAll(); } catch {}
     }
   })();
