@@ -548,7 +548,19 @@
 </div>
 
 <script>
-
+/* === App lock helpers (overlay + флаг) === */
+(function(){
+  const lockEl = document.getElementById('appLock');
+  let _locked = false;
+  window.setAppLocked = function(state, msg){
+    _locked = !!state;
+    if (!lockEl) return;
+    lockEl.classList.toggle('show', _locked);
+    const t = lockEl.querySelector('[data-msg]');
+    if (t && msg) t.textContent = msg;
+  };
+  window.isAppLocked = function(){ return _locked; };
+})();
 
 /* === disk status (must exist before any render) === */
 window.__yandexStatus = '';
@@ -1917,8 +1929,7 @@ function renderEventsTable(){
 }
 document.getElementById('opDate').value=ymdLocal(new Date());
 document.getElementById('repMonth').value=new Date().toISOString().slice(0,7);
-Store.load();
-renderAll();
+
 </script>
 
 
@@ -2082,19 +2093,25 @@ if ('serviceWorker' in navigator) {
 
 
 
-  // Первичная подгрузка с Яндекс.Диска на новых устройствах
+  // Первичная подгрузка с Яндекс.Диска (всегда поверх локальных)
   (async ()=>{
-    let localHasData = false;
-    try{
-      const local = JSON.parse(localStorage.getItem(storeKey) || '{}');
-      localHasData = !!(local.clients?.length || local.events?.length || local.inventory?.items?.length);
-    }catch{}
-    if (!localHasData && window.setAppLocked) setAppLocked(true, 'Загрузка данных из Яндекс.Диска…');
-    const remote = await window.yandex.load({ forceLocalOverride: !localHasData });
-    if (!localHasData && !remote){
-      // создадим файл в приложении, чтобы в следующий раз смогли загрузить
-      try{ await window.yandex.save(Store.data); }catch{}
+    if (window.setAppLocked) setAppLocked(true, 'Загрузка данных из Яндекс.Диска…');
+
+    // 1) Подгрузим локальные (для миграций и на случай офлайна),
+    //    но не рендерим UI, чтобы не мигали старые данные.
+    try { Store.load(); } catch {}
+
+    // 2) Всегда пытаемся загрузить с Диска и ПЕРЕЗАТЕРЕТЬ локальные
+    const remote = await window.yandex.load({ forceLocalOverride: true });
+
+    // Если на Диске ещё ничего нет — создадим файл из текущего Store.data
+    if (!remote){
+      try { await window.yandex.save(Store.data); } catch {}
     }
+
+    // 3) Теперь уже рендерим актуальные данные
+    try { renderAll(); } catch(e){ console.error(e); }
+
     if (window.setAppLocked) setAppLocked(false);
   })();
 
