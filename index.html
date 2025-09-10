@@ -849,7 +849,7 @@ const Store={
     migrateData();
   },
   save(opts = {}) {
-    if (window.isAppLocked && window.isAppLocked()) return; // блокируем изменения
+    if ((window.isAppLocked && window.isAppLocked()) || !window.__firstSyncDone) return;
     this.data.updatedAt = Date.now();
     localStorage.setItem(storeKey, JSON.stringify(this.data));
     renderAll();
@@ -927,6 +927,11 @@ function migrateData(){
 let currentClientId = null;
 let viewMonth=new Date();viewMonth.setDate(1);
 let editingEventId=null;
+
+
+/* Первая синхронизация с Яндекс.Диском */
+window.__firstSyncDone = false; // станет true только после успешной загрузки/создания файла на Диске
+
 
 /* ===== shared utils for purchases ===== */
 function totalEventsForPurchase(p, excludeEventId=null){
@@ -1790,7 +1795,7 @@ document.getElementById('sCreate').onclick=()=>{
 };
 let silentSaveTimer=null;
 function saveSilentlyDebounced(){
-  if (window.isAppLocked && window.isAppLocked()) return;
+  if ((window.isAppLocked && window.isAppLocked()) || !window.__firstSyncDone) return;
   clearTimeout(silentSaveTimer);
   silentSaveTimer = setTimeout(()=>{
     localStorage.setItem(storeKey, JSON.stringify(Store.data));
@@ -1883,6 +1888,7 @@ if (notifyBtn) notifyBtn.onclick = async () => {
 };
 
 const saveNowBtn = document.getElementById('saveNowBtn');
+if (saveNowBtn) saveNowBtn.disabled = true; // активируем после первой синхронизации
 if (saveNowBtn) {
   saveNowBtn.onclick = async () => {
     try{
@@ -1936,7 +1942,7 @@ document.getElementById('repMonth').value=new Date().toISOString().slice(0,7);
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js?v=31'); // ← добавили v=12
+  navigator.serviceWorker.register('service-worker.js?v=33'); // ← добавили v=12
 }
 </script>
 
@@ -2095,24 +2101,38 @@ if ('serviceWorker' in navigator) {
 
   // Первичная подгрузка с Яндекс.Диска (всегда поверх локальных)
   (async ()=>{
-    if (window.setAppLocked) setAppLocked(true, 'Загрузка данных из Яндекс.Диска…');
+    try {
+      if (window.setAppLocked) setAppLocked(true, 'Загрузка данных из Яндекс.Диска…');
 
-    // 1) Подгрузим локальные (для миграций и на случай офлайна),
-    //    но не рендерим UI, чтобы не мигали старые данные.
-    try { Store.load(); } catch {}
+      // Подтянем локальные только для миграций (без renderAll, чтобы не мигало)
+      try { Store.load(); } catch {}
 
-    // 2) Всегда пытаемся загрузить с Диска и ПЕРЕЗАТЕРЕТЬ локальные
-    const remote = await window.yandex.load({ forceLocalOverride: true });
+      // Жёстко грузим с Диска и перезаписываем локальные
+      const remote = await window.yandex.load({ forceLocalOverride: true });
 
-    // Если на Диске ещё ничего нет — создадим файл из текущего Store.data
-    if (!remote){
-      try { await window.yandex.save(Store.data); } catch {}
+      // Если файла ещё нет — создадим его из текущего Store.data
+      if (!remote) {
+        try { await window.yandex.save(Store.data); } catch {}
+      }
+
+      // Готово: разрешаем работу и включаем сохранения
+      window.__firstSyncDone = true;
+
+      try { renderAll(); } catch(e){ console.error(e); }
+
+      if (window.setAppLocked) setAppLocked(false);
+
+      // Кнопку «Сохранить» активируем теперь
+      const saveNowBtn = document.getElementById('saveNowBtn');
+      if (saveNowBtn) saveNowBtn.disabled = false;
+
+    } catch (e) {
+      console.error('Boot sync error', e);
+      updateDiskStatus('Яндекс.Диск: ошибка загрузки');
+      // Даже при ошибке разблокируем UI, но продолжим без автосохранений (firstSyncDone=false)
+      if (window.setAppLocked) setAppLocked(false);
+      try { renderAll(); } catch {}
     }
-
-    // 3) Теперь уже рендерим актуальные данные
-    try { renderAll(); } catch(e){ console.error(e); }
-
-    if (window.setAppLocked) setAppLocked(false);
   })();
 
 </script>
