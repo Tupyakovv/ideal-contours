@@ -1966,7 +1966,7 @@ document.getElementById('repMonth').value=new Date().toISOString().slice(0,7);
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js?v=38'); // ← добавили v=38
+  navigator.serviceWorker.register('service-worker.js?v=39'); // ← добавили v=38
 }
 </script>
 
@@ -1994,26 +1994,35 @@ if ('serviceWorker' in navigator) {
   }
 
   // ВАЖНО: путь в ПАПКЕ ПРИЛОЖЕНИЯ
-  const YD_PATH = 'disk:/ideal_contours_data.json';
+  // вместо одного пути — два кандидата
+  const YD_FILENAME = 'ideal_contours_data.json';
+  const YD_PATHS = ['app:/'+YD_FILENAME, 'disk:/'+YD_FILENAME];
+  let YD_PATH = YD_PATHS[0]; // актуальный успешно найденный путь
 
-  // Вспомогательные функции: получаем одноразовые ссылки
   async function yandexGetDownloadUrl(){
-    const url = 'https://cloud-api.yandex.net/v1/disk/resources/download?path=' + encodeURIComponent(YD_PATH);
-    const res = await fetch(url, { headers: { Authorization: 'OAuth ' + YD_TOKEN }});
-    if (res.status === 401 || res.status === 403) throw new Error('AUTH'); // нет прав/плохой токен
-    if (res.status === 404) return null;                                   // файла ещё нет
-    if (!res.ok) throw new Error('download link ' + res.status);
-    return (await res.json()).href;
+    for (const p of YD_PATHS){
+      const url = 'https://cloud-api.yandex.net/v1/disk/resources/download?path=' + encodeURIComponent(p);
+      const res = await fetch(url, { headers: { Authorization: 'OAuth ' + YD_TOKEN }});
+      if (res.status === 401 || res.status === 403) throw new Error('AUTH');
+      if (res.status === 404) continue;             // пробуем следующий путь
+      if (!res.ok) throw new Error('download link ' + res.status);
+      YD_PATH = p;
+      return (await res.json()).href;
+    }
+    return null; // нет ни там, ни там
   }
 
   async function yandexGetUploadUrl(){
-    const proxyUrl = 'https://thingproxy.freeboard.io/fetch/';
-    const apiUrl = 'https://cloud-api.yandex.net/v1/disk/resources/upload?overwrite=true&path=' + encodeURIComponent(YD_PATH);
-    const url = proxyUrl + apiUrl;
-    const res = await fetch(url, { headers: { Authorization: 'OAuth ' + YD_TOKEN }});
-    if (res.status === 401 || res.status === 403) throw new Error('AUTH');
-    if (!res.ok) throw new Error('upload link ' + res.status);
-    return (await res.json()).href;
+    for (const p of YD_PATHS){
+      const url = 'https://cloud-api.yandex.net/v1/disk/resources/upload?overwrite=true&path=' + encodeURIComponent(p);
+      const res = await fetch(url, { headers: { Authorization: 'OAuth ' + YD_TOKEN }});
+      if (res.status === 401 || res.status === 403) throw new Error('AUTH');
+      if (res.ok){
+        YD_PATH = p;
+        return (await res.json()).href;
+      }
+    }
+    throw new Error('upload link failed');
   }
 
   // Пинг для проверки токена
@@ -2193,5 +2202,4 @@ if ('serviceWorker' in navigator) {
   </div></div>
 </div>
 </body>
-
 </html>
