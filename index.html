@@ -274,7 +274,7 @@
 <header>
   <h1><span class="brand">IDEAL CONTOURS</span> — CRM · Записи · Склад · Абонементы</h1>
   <div class="actions">
-    <button id="notifyBtn" class="btn">🔔 Уведомления</button>
+    <button id="loadNowBtn" class="btn">📥 Загрузить с Яндекс.Диска</button>
     <button id="saveNowBtn" class="btn">Сохранить на Яндекс.Диск</button>
     <label class="btn ghost" style="margin:0">Импорт JSON <input id="importFile" type="file" accept=".json" style="display:none"/></label>
     <button id="exportBtn" class="btn">Экспорт JSON</button>
@@ -1879,13 +1879,6 @@ function renderAll(){
   showBirthdaysOncePerDay();
 }
 window.renderAll = renderAll;
-const notifyBtn = document.getElementById('notifyBtn');
-if (notifyBtn) notifyBtn.onclick = async () => {
-  if(!('Notification' in window)){ alert('Ваш браузер не поддерживает уведомления'); return; }
-  const res = await Notification.requestPermission();
-  if(res === 'granted'){ alert('Уведомления включены ✅'); }
-  else { alert('Разрешите уведомления, чтобы получать напоминания.'); }
-};
 
 const saveNowBtn = document.getElementById('saveNowBtn');
 if (saveNowBtn) {
@@ -1903,7 +1896,34 @@ if (saveNowBtn) {
     }
   };
 }
+const loadNowBtn = document.getElementById('loadNowBtn');
+if (loadNowBtn) {
+  loadNowBtn.onclick = async () => {
+    try{
+      // если нет токена — попросим (ydisk.load тоже умеет это делать, но так быстрее)
+      if (!localStorage.getItem('yandexToken')) {
+        await askToken();
+      }
 
+      if (window.setAppLocked) setAppLocked(true, 'Загрузка данных с Яндекс.Диска…');
+
+      const data = await window.ydisk.load({ forceLocalOverride: true });
+      // ydisk.load при forceLocalOverride уже кладёт данные в localStorage и Store.data
+      if (data) {
+        renderAll();
+        showMiniToast('Загружено с Яндекс.Диска ✓');
+      } else {
+        // файла может ещё не быть на диске
+        showMiniToast('Файл на Яндекс.Диске не найден', 3500);
+      }
+    } catch (e) {
+      console.error(e);
+      showMiniToast('Не удалось загрузить с Яндекс.Диска', 3500);
+    } finally {
+      if (window.setAppLocked) setAppLocked(false);
+    }
+  };
+}
 function renderEventsTable(){
   const tb = document.querySelector('#eventsTable tbody');
   if (!tb) return;
@@ -1946,7 +1966,7 @@ document.getElementById('repMonth').value=new Date().toISOString().slice(0,7);
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js?v=36'); // ← добавили v=36
+  navigator.serviceWorker.register('service-worker.js?v=37'); // ← добавили v=36
 }
 </script>
 
