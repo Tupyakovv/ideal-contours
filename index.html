@@ -5,9 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
   <meta name="theme-color" content="#0e1320">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <link rel="manifest" href="manifest.json">
   <title>IDEAL CONTOURS — CRM · Записи · Склад · Абонементы</title>
   <style>
+.applock{
+  position:fixed; inset:0; display:none;
+  align-items:center; justify-content:center;
+  background:rgba(3,6,15,.6);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  z-index:80;
+}
+.applock.show{ display:flex }
+  /* Toast для напоминаний */
+  .toast{
+    position:fixed; right:16px; bottom:16px; z-index:60;
+    background:#10131e; border:1px solid var(--border); color:var(--text);
+    border-radius:14px; box-shadow:var(--shadow); padding:10px 12px; display:none;
+    max-width:min(92vw,520px)
+  }
+  .toast.show{ display:block; animation:toastIn .25s ease }
+  @keyframes toastIn{ from{ transform:translateY(8px); opacity:.0 } to{ transform:translateY(0); opacity:1 } }
+  .toast .row{ gap:8px; justify-content:space-between; align-items:center }
 
     :root{
       --bg:#0b0c10; --panel:#10121a; --panel-2:#171b26; --muted:#a7b0c0; --text:#e9eef7;
@@ -71,13 +90,11 @@
     /* Вторая строка (Отчёты / + Продажа): липкая и автоскрываемая */
     .action-tabs{
       display:flex; gap:8px; padding:8px;
-      position:sticky; top:0; z-index:35;
+      position:static; top:auto; z-index:35;
       background:rgba(12,13,20,0.7);
-      backdrop-filter:saturate(140%) blur(10px);
-      transition:transform .25s ease;
-      border-bottom:1px solid var(--border);
+
     }
-    .action-tabs.hide{ transform:translateY(-140%); }
+    /*.action-tabs.hide{ transform:translateY(-140%); }
 
     /* Кнопки в шапке на телефоне — поменьше */
     @media (max-width:900px){
@@ -119,6 +136,16 @@
     .ok-t{color:#b6fbd3}.warn-t{color:#ffe59b}
     .right{text-align:right}
 
+    /* Иконка "ДР скоро" в списке клиентов */
+    .bday-ico{
+      display:inline-flex; align-items:center; justify-content:center;
+      width:18px; height:18px; margin-left:6px;
+      border-radius:50%;
+      background:linear-gradient(135deg,#ff9a9e,#fecf66);
+      color:#3a2000; font-size:12px; line-height:1;
+      border:1px solid rgba(255,255,255,.25);
+      box-shadow:0 2px 6px rgba(0,0,0,.25);
+    }
     .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:#151b2d;border:1px solid var(--border-2);font-size:12px}
     .hr{height:1px;background:#1f2336;margin:4px 0 8px}
     footer{padding:16px;text-align:center;color:#94a3b8}
@@ -243,19 +270,12 @@
   </style>
 </head>
 <body>
-<script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations()
-      .then(rs => rs.forEach(r => r.unregister()))
-      .then(() => caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))))
-      .then(() => console.log('✔ SW и кэши очищены — перезагрузите страницу (Ctrl+Shift+R)'));
-  }
-</script>
+
 <header>
   <h1><span class="brand">IDEAL CONTOURS</span> — CRM · Записи · Склад · Абонементы</h1>
   <div class="actions">
-    <button id="connectDirBtn" class="btn">Папка данных</button>
-    <button id="saveNowBtn" class="btn">Сохранить в файл</button>
+    <button id="loadNowBtn" class="btn">📥 Загрузить с Яндекс.Диска</button>
+    <button id="saveNowBtn" class="btn">Сохранить на Яндекс.Диск</button>
     <label class="btn ghost" style="margin:0">Импорт JSON <input id="importFile" type="file" accept=".json" style="display:none"/></label>
     <button id="exportBtn" class="btn">Экспорт JSON</button>
     <button id="clearBtn" class="btn danger">Очистить всё</button>
@@ -430,7 +450,10 @@
   </section>
 </div>
 
-<footer>Данные сохраняются локально и (при подключении) в файл <strong>ideal_contours_data.json</strong>. Версия 4.0</footer>
+<footer>Данные сохраняются локально и на Яндекс Диск (при подключении) в файл <strong>ideal_contours_data.json</strong>. Версия 4.0</footer>
+
+<div id="bdayToast" class="toast" role="status" aria-live="polite"></div>
+<div id="saveToast" class="toast" role="status" aria-live="polite"></div>
 
 <!-- Модалка записи -->
 <div class="modal" id="eventModal">
@@ -525,7 +548,162 @@
 </div>
 
 <script>
+/* === App lock helpers (overlay + флаг) === */
+(function(){
+  const lockEl = document.getElementById('appLock');
+  let _locked = false;
+  window.setAppLocked = function(state, msg){
+    _locked = !!state;
+    if (!lockEl) return;
+    lockEl.classList.toggle('show', _locked);
+    const t = lockEl.querySelector('[data-msg]');
+    if (t && msg) t.textContent = msg;
+  };
+  window.isAppLocked = function(){ return _locked; };
+})();
+
+/* === disk status (must exist before any render) === */
+window.__yandexStatus = '';
+function updateDiskStatus(t){
+  const el = document.getElementById('diskStatus');
+  if (el) el.textContent = t;
+  window.__yandexStatus = t;
+}
+
 /* ===== helpers ===== */
+
+function showMiniToast(msg, timeout=2000){
+  const box = document.getElementById('saveToast');
+  if (!box) return;
+  box.innerHTML = `<div class="row">${msg}</div>`;
+  box.style.display = 'block';
+  // даём CSS-анимации стартовать
+  requestAnimationFrame(()=> box.classList.add('show'));
+  // авто-закрытие
+  clearTimeout(box.__t);
+  box.__t = setTimeout(()=>{
+    box.classList.remove('show');
+    box.style.display = 'none';
+  }, timeout);
+}
+
+
+function previousBirthdayDate(birthStr){
+  if(!birthStr) return null;
+  const [y,m,d] = birthStr.split('-').map(Number);
+  if(!m || !d) return null;
+  const today = startOfDay(new Date());
+  let bd = new Date(today.getFullYear(), (m||1)-1, d||1);
+  bd.setHours(0,0,0,0);
+  if (bd > today) bd.setFullYear(bd.getFullYear()-1);
+  return bd;
+}
+
+function ruPlural(n, one, few, many){
+  const n10 = n % 10, n100 = n % 100;
+  if(n10 === 1 && n100 !== 11) return one;
+  if(n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) return few;
+  return many;
+}
+
+// ∆ до ближайших ДР: toNext ≥0 (в днях до следующего), fromPrev ≤0 (в днях от предыдущего)
+function birthdayDeltaWindow(birthStr){
+  const today = startOfDay(new Date());
+  const nb = nextBirthdayDate(birthStr);
+  const pb = previousBirthdayDate(birthStr);
+  return {
+    toNext:  nb ? daysBetween(nb, today) : null,   // 0..365
+    fromPrev: pb ? daysBetween(pb, today) : null,  // -365..0
+  };
+}
+
+function resetNewClientFields(){
+  const n = id => document.getElementById(id);
+  if (n('sName'))  n('sName').value  = '';
+  if (n('sPhone')) n('sPhone').value = '';
+  if (n('sBirth')) n('sBirth').value = '';
+
+  // источник ставим по умолчанию (первая площадка)
+  const sSource = document.getElementById('sSource');
+  if (sSource) {
+    fillSelect(
+      sSource,
+      Store.data.catalog.platforms.map(p => ({ value:p, label:p })),
+      Store.data.catalog.platforms[0]
+    );
+  }
+}
+
+
+function startOfDay(d){ const t=new Date(d); t.setHours(0,0,0,0); return t; }
+function nextBirthdayDate(birthStr){
+  if(!birthStr) return null;
+  const [y,m,d] = birthStr.split('-').map(Number);
+  if(!y||!m||!d) return null;
+  const today = startOfDay(new Date());
+  let bd = new Date(today.getFullYear(), (m||1)-1, d||1);
+  bd.setHours(0,0,0,0);
+  if (bd < today) bd.setFullYear(bd.getFullYear()+1);
+  return bd;
+}
+function daysBetween(a,b){ return Math.round((startOfDay(a)-startOfDay(b))/86400000); }
+function clientsWithBirthdayIn(days){
+  const today = startOfDay(new Date());
+  return (Store.data.clients||[]).filter(c=>{
+    const bd = nextBirthdayDate(c.birth);
+    return !!bd && daysBetween(bd, today) === days;
+  });
+}
+
+function showBirthdayToast(list){
+  const box = document.getElementById('bdayToast'); if(!box) return;
+  if(!list.length){ box.classList.remove('show'); box.style.display='none'; return; }
+  const names = list.slice(0,3).map(c=>c.fio||'Без имени').join(', ');
+  const more  = list.length>3 ? ` и ещё ${list.length-3}` : '';
+  box.innerHTML = `
+    <div class="row">
+      <div>🎂 Через 3 дня день рождения: <strong>${names}</strong>${more}.</div>
+      <button class="btn" id="toastClose">Закрыть</button>
+    </div>`;
+  box.style.display='block';
+  box.classList.add('show');
+  box.querySelector('#toastClose')?.addEventListener('click',()=>{ box.classList.remove('show'); box.style.display='none'; });
+}
+
+async function maybeShowLocalNotification(list){
+  // локальное системное уведомление (покажется только если вкладка сейчас открыта и даны права)
+  if(!('Notification' in window)) return;
+  if(Notification.permission !== 'granted') return;
+  if(!list.length) return;
+  const names = list.slice(0,3).map(c=>c.fio||'Без имени').join(', ');
+  const more  = list.length>3 ? ` и ещё ${list.length-3}` : '';
+  new Notification('🎂 Скоро день рождения', { body:`Через 3 дня: ${names}${more}.` });
+}
+
+function daysToBirthday(birthStr){
+  const bd = nextBirthdayDate(birthStr);
+  if(!bd) return null;
+  const today = startOfDay(new Date());
+  return daysBetween(bd, today);
+}
+
+// Показ тоста/локального уведомления только 1 раз в сутки (если есть именинники через 3 дня)
+const BDAY_NOTIFY_KEY = 'bdayNotifyShownOn';
+function showBirthdaysOncePerDay(){
+  const today = ymdLocal(new Date());
+  if (localStorage.getItem(BDAY_NOTIFY_KEY) === today) return; // уже показывали сегодня
+
+  const list = clientsWithBirthdayIn(3);
+  if (list.length){
+    showBirthdayToast(list);
+    maybeShowLocalNotification(list);
+    localStorage.setItem(BDAY_NOTIFY_KEY, today);
+  } else {
+    // Никого нет — ключ не ставим, чтобы показать позже в этот же день, если данные появятся
+  }
+}
+
+
 const _vp = document.querySelector('meta[name="viewport"]');
 function lockZoom(){
   if(!_vp) return;
@@ -658,16 +836,8 @@ function closeEventModal(){
   unlockZoom();                               // возвращаем зум
 }
 
-let silentSaveTimer=null;
-function saveSilentlyDebounced(){
-  clearTimeout(silentSaveTimer);
-  silentSaveTimer = setTimeout(()=>{
-    // сохраняем без перерисовки интерфейса
-    localStorage.setItem(storeKey, JSON.stringify(Store.data));
-    saveToDiskDebounced();
-    if (window.cloud?.save) window.cloud.save(Store.data).catch(console.warn);
-  }, 300);
-}
+
+
 
 /* ===== Store ===== */
 const VERSION=4; const storeKey="idealContoursV3";
@@ -678,17 +848,19 @@ const Store={
     if(!this.data.catalog.subs?.length) seedSubs();
     migrateData();
   },
-  save(){
+  save(opts = {}) {
+    if ((window.isAppLocked && window.isAppLocked()) || !window.__firstSyncDone) return;
+    this.data.updatedAt = Date.now();
     localStorage.setItem(storeKey, JSON.stringify(this.data));
     renderAll();
-    saveToDiskDebounced();
-    if (window.cloud?.save) window.cloud.save(this.data).catch(console.warn);
+    /* ЗАМЕНА: сохраняем в Яндекс.Диск (дебаунс) */
+    saveToYandexDebounced();
   },
   export(){const blob=new Blob([JSON.stringify(this.data,null,2)],{type:"application/json"});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download="ideal_contours_data.json";a.click();URL.revokeObjectURL(a.href)},
   async import(file){const text=await file.text();try{const data=JSON.parse(text);if(!data.clients||!data.events||!data.inventory||!data.catalog)throw new Error("Неверный файл");this.data=data;migrateData();this.save()}catch(e){alert("Ошибка импорта: "+e.message)}},
   clear(){if(confirm("Удалить все данные?")){localStorage.removeItem(storeKey);this.data={clients:[],events:[],inventory:{items:[],ops:[]},catalog:{subs:[],platforms:this.data.catalog.platforms},version:VERSION};seedSubs();renderAll()}}
 };
-
+window.Store = Store;
 function seedSubs(){
   const list=[
     ["Индивидуальный 12 сеансов",12,"individual",18000],["Индивидуальный 15 сеансов",15,"individual",21000],
@@ -755,6 +927,11 @@ function migrateData(){
 let currentClientId = null;
 let viewMonth=new Date();viewMonth.setDate(1);
 let editingEventId=null;
+
+
+/* Первая синхронизация с Яндекс.Диском */
+window.__firstSyncDone = false; // станет true только после успешной загрузки/создания файла на Диске
+
 
 /* ===== shared utils for purchases ===== */
 function totalEventsForPurchase(p, excludeEventId=null){
@@ -825,14 +1002,38 @@ function renderClients(filter=""){
   document.getElementById('clientStats').textContent=`${arr.length} клиентов`;
   if(arr.length===0){box.innerHTML=`<div class="content"><div class="muted">Нет клиентов. Нажмите «+ Продажа».</div></div>`;return}
   arr.forEach(c=>{
-    const debt=clientDebt(c);
-    const div=document.createElement('div');
-    div.className="client-item";
-    div.innerHTML=`<div><div><strong>${c.fio||"Без имени"}</strong></div><div class="muted">${(c.purchases?.length||0)} абон.</div></div>
-                   <div class="stack right"><span class="pill ${debt>0?'warn-t':'ok-t'}">${fmtRub(debt)}</span></div>`;
-    div.onclick=()=>{ currentClientId=c.id; loadClientForm(); renderPurchases(); updateClientCardVisibility(); };
-    box.appendChild(div)
-  })
+    const debt = clientDebt(c);
+
+    const { toNext, fromPrev } = birthdayDeltaWindow(c.birth);
+    const inWindow =
+      (toNext   != null && toNext   >= 0 && toNext   <= 3) ||
+      (fromPrev != null && fromPrev <= 0 && fromPrev >= -3);
+
+    let tip = '';
+    if (toNext != null && toNext >= 0 && toNext <= 3){
+      tip = toNext === 0 ? 'ДР сегодня' : `ДР через ${toNext} ${ruPlural(toNext,'день','дня','дней')}`;
+    } else if (fromPrev != null && fromPrev <= 0 && fromPrev >= -3){
+      const n = Math.abs(fromPrev);
+      tip = fromPrev === 0 ? 'ДР сегодня' : `ДР был ${n} ${ruPlural(n,'день','дня','дней')} назад`;
+    }
+
+    const bdayIcon = inWindow
+      ? `<span class="bday-ico" title="${tip}" aria-label="${tip}">🎂</span>`
+      : '';
+
+    const div = document.createElement('div');
+    div.className = "client-item";
+    div.innerHTML = `
+      <div>
+        <div><strong>${c.fio || "Без имени"}</strong>${bdayIcon}</div>
+        <div class="muted">${(c.purchases?.length||0)} абон.</div>
+      </div>
+      <div class="stack right">
+        <span class="pill ${debt>0?'warn-t':'ok-t'}">${fmtRub(debt)}</span>
+      </div>`;
+    div.onclick = ()=>{ currentClientId=c.id; loadClientForm(); renderPurchases(); updateClientCardVisibility(); };
+    box.appendChild(div);
+  });
 }
 
 /* ===== Client card (top) ===== */
@@ -1473,6 +1674,8 @@ function renderSubs(){
 }
 
 /* ===== Reports ===== */
+
+
 function calcMonthReport(ym){
   const [Y,M]=ym.split('-').map(Number);
   const start=new Date(Y,M-1,1);const end=new Date(Y,M,1);
@@ -1492,30 +1695,36 @@ function renderReport(){
   document.getElementById('repEvents').textContent=r.eventsCount
 }
 
-/* ===== File System Access ===== */
-let dirHandle=null,fileHandle=null,saveTimer=null;
-function isFSA(){return'showDirectoryPicker'in window}
-async function connectDir(){
-  if(!isFSA()){alert("Ваш браузер не поддерживает прямое сохранение в папку. Используйте Экспорт/Импорт JSON.");return}
-  try{dirHandle=await window.showDirectoryPicker();fileHandle=await dirHandle.getFileHandle('ideal_contours_data.json',{create:true});await saveToDisk();updateDiskStatus("Папка подключена")}
-  catch(e){console.warn(e);updateDiskStatus("Папка не подключена")}
-}
-async function saveToDisk(){if(!fileHandle)return;const w=await fileHandle.createWritable();await w.write(JSON.stringify(Store.data,null,2));await w.close()}
-function saveToDiskDebounced(){if(!fileHandle)return;clearTimeout(saveTimer);saveTimer=setTimeout(saveToDisk,400)}
-function updateDiskStatus(t){const el=document.getElementById('diskStatus');if(el)el.textContent=t}
+
 
 /* ===== New Sale modal ===== */
 function toggleNewClientBox(){
   const isNew = document.getElementById('sClient').value === "__new__";
-  document.getElementById('sNewBox').style.display = isNew ? 'grid' : 'none';
+  const box = document.getElementById('sNewBox');
+  box.style.display = isNew ? 'grid' : 'none';
+
+  if (isNew) {
+    resetNewClientFields();
+    // удобно сразу поставить фокус в ФИО
+    setTimeout(() => document.getElementById('sName')?.focus(), 0);
+  }
 }
+
 
 document.getElementById('sClient').addEventListener('change', toggleNewClientBox);
 
 function openSale(){
   lockZoom();
   initSelectors();
-  toggleNewClientBox();                       // сразу выставляем корректное состояние
+
+  const sc = document.getElementById('sClient');
+  const isNewAlreadySelected = sc && sc.value === "__new__";
+
+  toggleNewClientBox();                 // покажем/спрячем блок
+  if (isNewAlreadySelected) {
+    resetNewClientFields();             // и очистим поля, если уже выбран «новый»
+  }
+
   document.getElementById('saleModal').classList.add('open');
   recalcSale();
 }
@@ -1584,6 +1793,17 @@ document.getElementById('sCreate').onclick=()=>{
   closeSale();
   loadClientForm();renderPurchases();
 };
+let silentSaveTimer=null;
+function saveSilentlyDebounced(){
+  if ((window.isAppLocked && window.isAppLocked()) || !window.__firstSyncDone) return;
+  clearTimeout(silentSaveTimer);
+  silentSaveTimer = setTimeout(()=>{
+    localStorage.setItem(storeKey, JSON.stringify(Store.data));
+    saveToYandexDebounced();                 // ← только Яндекс
+    // никаких Store.cloud / FSA / Firebase
+  }, 300);
+}
+
 
 /* ===== wiring ===== */
 
@@ -1615,8 +1835,8 @@ window.addEventListener('scroll', () => {
   lastY = st;
 });
 
-document.getElementById('connectDirBtn').onclick=connectDir;
-document.getElementById('saveNowBtn').onclick=saveToDisk;
+
+
 document.getElementById('exportBtn').onclick=()=>Store.export();
 document.getElementById('clearBtn').onclick=()=>Store.clear();
 document.getElementById('importFile').addEventListener('change',e=>{const f=e.target.files?.[0];if(f)Store.import(f)});
@@ -1654,7 +1874,55 @@ function renderAll(){
   renderPurchases();
   renderCalendar();renderEventsTable();
   renderItems();renderSubs();renderReport();
-  updateDiskStatus(fileHandle?"Автосохранение включено":"Автосохранение в файл выключено")
+  /* ЗАМЕНА строки статуса: */
+  updateDiskStatus(window.__yandexStatus || "Яндекс.Диск: готово");
+  showBirthdaysOncePerDay();
+}
+window.renderAll = renderAll;
+
+const saveNowBtn = document.getElementById('saveNowBtn');
+if (saveNowBtn) {
+  saveNowBtn.disabled = false; // всегда кликабельна
+  saveNowBtn.onclick = async () => {
+    // если нет токена — попросим
+    if (!localStorage.getItem('yandexToken')) {
+      await askToken();
+    }
+    try{
+      await window.ydisk.save(Store.data);
+      showMiniToast('Сохранено на Яндекс.Диск ✓');
+    }catch(e){
+      showMiniToast('Не удалось сохранить на Яндекс.Диск', 3500);
+    }
+  };
+}
+const loadNowBtn = document.getElementById('loadNowBtn');
+if (loadNowBtn) {
+  loadNowBtn.onclick = async () => {
+    try{
+      // если нет токена — попросим (ydisk.load тоже умеет это делать, но так быстрее)
+      if (!localStorage.getItem('yandexToken')) {
+        await askToken();
+      }
+
+      if (window.setAppLocked) setAppLocked(true, 'Загрузка данных с Яндекс.Диска…');
+
+      const data = await window.ydisk.load({ forceLocalOverride: true });
+      // ydisk.load при forceLocalOverride уже кладёт данные в localStorage и Store.data
+      if (data) {
+        renderAll();
+        showMiniToast('Загружено с Яндекс.Диска ✓');
+      } else {
+        // файла может ещё не быть на диске
+        showMiniToast('Файл на Яндекс.Диске не найден', 3500);
+      }
+    } catch (e) {
+      console.error(e);
+      showMiniToast('Не удалось загрузить с Яндекс.Диска', 3500);
+    } finally {
+      if (window.setAppLocked) setAppLocked(false);
+    }
+  };
 }
 function renderEventsTable(){
   const tb = document.querySelector('#eventsTable tbody');
@@ -1691,59 +1959,240 @@ function renderEventsTable(){
 }
 document.getElementById('opDate').value=ymdLocal(new Date());
 document.getElementById('repMonth').value=new Date().toISOString().slice(0,7);
-Store.load();
-renderAll();
+
 </script>
+
+
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js?v=23'); // ← добавили v=12
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js', { scope: '/' });
+  });
 }
 </script>
 
-<script type="module">
-  import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
-  const firebaseConfig = {
-    apiKey: "AIzaSyCYaKdFnRC8yJKGhRvKfay9lW0dWIjvlJA",
-    authDomain: "ideal-contours.firebaseapp.com",
-    projectId: "ideal-contours",
-    storageBucket: "ideal-contours.firebasestorage.app",
-    messagingSenderId: "199754637826",
-    appId: "1:199754637826:web:14821729e21fb274017d1b",
-    measurementId: "G-SG047L9MZ5"
-  };
-  const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-  const STUDIO_ID = localStorage.getItem('studioId') || 'ideal-contours';
-  localStorage.setItem('studioId', STUDIO_ID);
+<!-- ДОБАВИТЬ: Яндекс.Диск -->
+<script>
+  /* ===== Яндекс.Диск: только папка приложения (app:/) ===== */
+  // Автозапрос токена при 401/403 и повтор операции
+  const AUTO_PROMPT_TOKEN_ON_AUTH = true;
+  // Плашка статуса в UI
+  function updateDiskStatus(t){
+    const el = document.getElementById('diskStatus');
+    if (el) { el.textContent = t; el.style.cursor = 'pointer'; }
+    window.__yandexStatus = t; // ← добавьте эту строку
+  }
 
-  window.debug = { appOptions: () => app.options, studioId: () => STUDIO_ID };
 
-  window.cloud = {
-    async load() {
-      try {
-        const { getFirestore, doc, getDoc } =
-          await import("https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js");
-        const db = getFirestore(app);
-        const ref = doc(db, 'studios', STUDIO_ID);
-        const snap = await getDoc(ref);
-        if (snap.exists()) {
-          const data = snap.data();
-          localStorage.setItem('idealContoursV3', JSON.stringify(data));
-          if (window.Store) { window.Store.data = data; migrateData?.(); renderAll(); }
+
+
+  // Токен: берём из localStorage, если нет — используем ваш дефолт
+  const YD_TOKEN_KEY = 'yandexToken';
+  let YD_TOKEN = localStorage.getItem(YD_TOKEN_KEY) || 'y0__xD667mOBxjMmDogwIXwrRRepr6C2FRlCmsbsa-ZYYdcNmCCxQ';
+  function setYandexToken(t){
+    YD_TOKEN = (t || '').trim();
+    localStorage.setItem(YD_TOKEN_KEY, YD_TOKEN);
+  }
+
+  // ВАЖНО: путь в ПАПКЕ ПРИЛОЖЕНИЯ
+  const API_FILE = '/api/ydisk/file';
+  const YD_PATH = 'disk:/ideal_contours_data.json';
+
+  // Вспомогательные функции: получаем одноразовые ссылки
+  async function yandexGetDownloadUrl(){
+    const url = 'https://cloud-api.yandex.net/v1/disk/resources/download?path=' + encodeURIComponent(YD_PATH);
+    const res = await fetch(url, { headers: { Authorization: 'OAuth ' + YD_TOKEN }});
+    if (res.status === 401 || res.status === 403) throw new Error('AUTH'); // нет прав/плохой токен
+    if (res.status === 404) return null;                                   // файла ещё нет
+    if (!res.ok) throw new Error('download link ' + res.status);
+    return (await res.json()).href;
+  }
+
+  async function yandexGetUploadUrl(){
+    const url = 'https://cloud-api.yandex.net/v1/disk/resources/upload?overwrite=true&path=' + encodeURIComponent(YD_PATH);
+    const res = await fetch(url, { headers: { Authorization: 'OAuth ' + YD_TOKEN }});
+    if (res.status === 401 || res.status === 403) throw new Error('AUTH');
+    if (!res.ok) throw new Error('upload link ' + res.status);
+    return (await res.json()).href;
+  }
+
+  // Пинг для проверки токена
+  async function yandexPing(){
+     const url = 'https://cloud-api.yandex.net/v1/disk/resources?path=' + encodeURIComponent('disk:/');
+     const res = await fetch(url, { headers: { Authorization: 'OAuth ' + YD_TOKEN }});
+     return res.ok; // 200 — токен годен для app:/
+   }
+
+  // Диалог ввода токена (без бесконечных всплытий)
+  let __ydPromptedOnce = false;
+  let __ydAuthMutedUntil = 0;
+  const __YD_AUTH_MUTE_MS = 60 * 1000;
+
+  async function askToken(){
+    const now = Date.now();
+    if (__ydPromptedOnce && now < __ydAuthMutedUntil) return;
+
+    const t = prompt('Введите OAuth-токен Яндекс.Диска:', YD_TOKEN || '');
+    if (!t) {
+      __ydPromptedOnce = true;
+      __ydAuthMutedUntil = now + __YD_AUTH_MUTE_MS;
+      updateDiskStatus('Яндекс.Диск: токен не введён');
+      return;
+    }
+    const old = YD_TOKEN; YD_TOKEN = t.trim();
+
+    try{
+      updateDiskStatus('Яндекс.Диск: проверка токена…');
+      const ok = await yandexPing();
+      if (!ok) throw new Error('bad token');
+
+      setYandexToken(YD_TOKEN);
+      updateDiskStatus('Яндекс.Диск: токен сохранён ✓');
+      __ydPromptedOnce = true;
+      __ydAuthMutedUntil = 0;
+
+      // Сразу сохраним текущие данные
+      await window.ydisk.save(Store.data);
+    }catch(e){
+      YD_TOKEN = old;
+      __ydPromptedOnce = true;
+      __ydAuthMutedUntil = now + __YD_AUTH_MUTE_MS;
+      alert('Токен недействителен или без доступа к папке приложения.');
+      updateDiskStatus('Яндекс.Диск: недействительный токен');
+    }
+  }
+
+  // Клик по статусу — ручной ввод/смена токена
+  const diskStatusEl = document.getElementById('diskStatus');
+  if (diskStatusEl){
+    diskStatusEl.title = 'Нажмите, чтобы ввести/сменить токен Яндекс.Диска';
+    diskStatusEl.addEventListener('click', askToken);
+  }
+
+  // API загрузки/сохранения
+  window.ydisk = {
+    async load({ forceLocalOverride = true } = {}) {
+      updateDiskStatus('Яндекс.Диск: загрузка…');
+      try{
+        const res = await fetch(`${API_FILE}?path=${encodeURIComponent(YD_PATH)}`, {
+          headers: { Authorization: 'OAuth ' + YD_TOKEN }
+        });
+        if (res.status === 401 || res.status === 403) throw new Error('AUTH');
+        if (res.status === 404) { updateDiskStatus('Яндекс.Диск: файл ещё не создан'); return null; }
+        if (!res.ok) throw new Error('download ' + res.status);
+
+        const json = await res.json();
+        if (forceLocalOverride){
+          localStorage.setItem(storeKey, JSON.stringify(json));
+          if (window.Store) window.Store.data = json;
         }
-      } catch (e) { console.error('Cloud load error', e); }
+        updateDiskStatus('Яндекс.Диск: загружено ✓');
+        return json;
+      } catch (e){
+        if (e.message === 'AUTH') {
+          updateDiskStatus('Яндекс.Диск: требуется токен');
+          if (AUTO_PROMPT_TOKEN_ON_AUTH) { await askToken(); return await window.ydisk.load({ forceLocalOverride }); }
+        }
+        console.error('Yandex load error', e);
+        updateDiskStatus('Яндекс.Диск: ошибка загрузки');
+        return null;
+      }
     },
-    async save(data) {
-      try {
-        const { getFirestore, doc, setDoc } =
-          await import("https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js");
-        const db = getFirestore(app);
-        const ref = doc(db, 'studios', STUDIO_ID);
-        await setDoc(ref, data, { merge: false });
-      } catch (e) { console.error('Cloud save error', e); }
+
+    async save(localData){
+      try{
+        const res = await fetch(`${API_FILE}?path=${encodeURIComponent(YD_PATH)}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'OAuth ' + YD_TOKEN
+          },
+          body: JSON.stringify(localData ?? Store.data),
+        });
+        if (res.status === 401 || res.status === 403) throw new Error('AUTH');
+        if (!res.ok) throw new Error('upload ' + res.status);
+        updateDiskStatus('Яндекс.Диск: сохранено ✓');
+      } catch (e){
+        if (e.message === 'AUTH') {
+          updateDiskStatus('Яндекс.Диск: требуется токен');
+          if (AUTO_PROMPT_TOKEN_ON_AUTH) {
+            await askToken();
+            try {
+              await fetch(`${API_FILE}?path=${encodeURIComponent(YD_PATH)}`, {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: 'OAuth ' + YD_TOKEN
+                },
+                body: JSON.stringify(localData ?? Store.data),
+              });
+              updateDiskStatus('Яндекс.Диск: сохранено ✓');
+            } catch (err) { console.error(err); }
+          }
+          return;
+        }
+        console.error('Yandex save error', e);
+        updateDiskStatus('Яндекс.Диск: ошибка сохранения');
+      }
     }
   };
-  window.cloud.load();
+
+  // Дебаунс-автосохранение только в Яндекс
+  let saveYdTimer=null;
+  function saveToYandexDebounced(){
+    clearTimeout(saveYdTimer);
+    saveYdTimer = setTimeout(()=> window.ydisk.save(Store.data), 400);
+  }
+
+
+
+  // Первичная подгрузка с Яндекс.Диска (всегда поверх локальных)
+  (async ()=>{
+    try {
+      if (window.setAppLocked) setAppLocked(true, 'Загрузка данных из Яндекс.Диска…');
+
+      // Подтянем локальные только для миграций (без renderAll, чтобы не мигало)
+      try { Store.load(); } catch {}
+
+      // Жёстко грузим с Диска и перезаписываем локальные
+      const remote = await window.ydisk.load({ forceLocalOverride: true });
+
+      // Если файла ещё нет — создадим его из текущего Store.data
+      if (!remote) {
+        try { await window.ydisk.save(Store.data); } catch {}
+      }
+
+      // Готово: разрешаем работу и включаем сохранения
+      window.__firstSyncDone = true;
+
+      try { renderAll(); } catch(e){ console.error(e); }
+
+      if (window.setAppLocked) setAppLocked(false);
+
+      // Кнопку «Сохранить» активируем теперь
+      const saveNowBtn = document.getElementById('saveNowBtn');
+      if (saveNowBtn) saveNowBtn.disabled = false;
+
+    } catch (e) {
+      console.error('Boot sync error', e);
+      updateDiskStatus('Яндекс.Диск: ошибка загрузки');
+      if (window.setAppLocked) setAppLocked(false);
+      // ВАЖНО: разрешаем локальный режим, чтобы всё работало без облака
+      window.__firstSyncDone = true;
+      try { renderAll(); } catch {}
+    }
+  })();
+
 </script>
+<!-- /ДОБАВИТЬ: Яндекс.Диск -->
+
+
+<div id="appLock" class="applock">
+  <div class="card"><div class="content">
+    <b data-msg>Загрузка данных…</b>
+    <div class="muted">Пожалуйста, подождите</div>
+  </div></div>
+</div>
 </body>
 </html>
