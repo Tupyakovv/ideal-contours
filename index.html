@@ -2007,7 +2007,9 @@ if ('serviceWorker' in navigator) {
   }
 
   async function yandexGetUploadUrl(){
-    const url = 'https://cloud-api.yandex.net/v1/disk/resources/upload?overwrite=true&path=' + encodeURIComponent(YD_PATH);
+    const proxyUrl = 'https://thingproxy.freeboard.io/fetch/';
+    const apiUrl = 'https://cloud-api.yandex.net/v1/disk/resources/upload?overwrite=true&path=' + encodeURIComponent(YD_PATH);
+    const url = proxyUrl + apiUrl;
     const res = await fetch(url, { headers: { Authorization: 'OAuth ' + YD_TOKEN }});
     if (res.status === 401 || res.status === 403) throw new Error('AUTH');
     if (!res.ok) throw new Error('upload link ' + res.status);
@@ -2191,4 +2193,5 @@ if ('serviceWorker' in navigator) {
   </div></div>
 </div>
 </body>
+
 </html>
