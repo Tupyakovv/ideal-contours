@@ -1987,7 +1987,7 @@ if ('serviceWorker' in navigator) {
 
   // Токен: берём из localStorage, если нет — используем ваш дефолт
   const YD_TOKEN_KEY = 'yandexToken';
-  let YD_TOKEN = localStorage.getItem(YD_TOKEN_KEY) || '';
+  let YD_TOKEN = localStorage.getItem(YD_TOKEN_KEY) || 'y0__xD667mOBxjMmDogwIXwrRRepr6C2FRlCmsbsa-ZYYdcNmCCxQ';
   function setYandexToken(t){
     YD_TOKEN = (t || '').trim();
     localStorage.setItem(YD_TOKEN_KEY, YD_TOKEN);
@@ -2009,7 +2009,7 @@ if ('serviceWorker' in navigator) {
 
   async function yandexGetUploadUrl(){
     const url = 'https://cloud-api.yandex.net/v1/disk/resources/upload?overwrite=true&path=' + encodeURIComponent(YD_PATH);
-    const res = await fetch(url, { headers: { Authorization: 'OAuth ' + y0__xD667mOBxjMmDogwIXwrRRepr6C2FRlCmsbsa-ZYYdcNmCCxQ }});
+    const res = await fetch(url, { headers: { Authorization: 'OAuth ' + YD_TOKEN }});
     if (res.status === 401 || res.status === 403) throw new Error('AUTH');
     if (!res.ok) throw new Error('upload link ' + res.status);
     return (await res.json()).href;
@@ -2196,5 +2196,6 @@ if ('serviceWorker' in navigator) {
 </body>
 
 </html>
+
 
 
