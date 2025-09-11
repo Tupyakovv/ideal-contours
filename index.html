@@ -267,6 +267,61 @@
       header h1{font-size:14px}
       .btn{font-size:14px}
     }
+
+
+    /* === MOBILE: модалка "Отчёт по клиентам" === */
+  @media (max-width: 900px){
+    /* сама модалка — на весь экран, без больших скруглений */
+    #clientReportModal .sheet{
+      width:100vw;
+      max-height:100dvh;
+      border-radius:0;
+    }
+
+    /* главная сетка: из 2 колонок в 1 */
+    #clientReportModal .sheet .content{
+      grid-template-columns: 1fr !important;
+      gap:10px;
+      padding:10px 12px;
+    }
+
+    /* список клиентов сверху, ограничим высоту */
+    #clientReportModal aside.card{
+      max-height:40vh;
+      overflow:auto;
+    }
+
+    /* заголовок справа — ужмём, чтобы кнопка "Закрыть" помещалась */
+    #clientReportModal #rTitle{
+      max-width:70vw;
+      overflow:hidden;
+      white-space:nowrap;
+      text-overflow:ellipsis;
+    }
+
+    /* KPI-сетки: 4 -> 2 колонки, 3 -> 2 колонки */
+    #clientReportModal .content [style*="repeat(4,1fr)"]{
+      grid-template-columns: 1fr 1fr !important;
+    }
+    #clientReportModal .content [style*="repeat(3,1fr)"]{
+      grid-template-columns: 1fr 1fr !important;
+    }
+
+    /* таблицы — безопасный горизонтальный скролл */
+    #clientReportModal .xscroll{
+      overflow-x:auto;
+      -webkit-overflow-scrolling:touch;
+    }
+
+    /* чуть компактнее ячейки таблиц в отчёте */
+    #clientReportModal table th,
+    #clientReportModal table td{
+      white-space:nowrap;
+    }
+  }
+
+
+
   </style>
 </head>
 <body>
