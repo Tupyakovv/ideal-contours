@@ -1966,7 +1966,7 @@ document.getElementById('repMonth').value=new Date().toISOString().slice(0,7);
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js?v=37'); // ← добавили v=36
+  navigator.serviceWorker.register('service-worker.js?v=38'); // ← добавили v=38
 }
 </script>
 
@@ -2030,7 +2030,7 @@ if ('serviceWorker' in navigator) {
     const now = Date.now();
     if (__ydPromptedOnce && now < __ydAuthMutedUntil) return;
 
-    const t = prompt('Введите OAuth-токен Яндекс.Диска (доступ только к папке приложения):', YD_TOKEN || '');
+    const t = prompt('Введите OAuth-токен Яндекс.Диска:', YD_TOKEN || '');
     if (!t) {
       __ydPromptedOnce = true;
       __ydAuthMutedUntil = now + __YD_AUTH_MUTE_MS;
@@ -2191,6 +2191,4 @@ if ('serviceWorker' in navigator) {
   </div></div>
 </div>
 </body>
-
 </html>
-
