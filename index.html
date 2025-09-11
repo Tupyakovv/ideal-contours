@@ -401,6 +401,12 @@
     }
   }
 
+  /* было: aside -> order:2, main -> order:1 */
+  @media (max-width:900px){
+    #tab-clients aside.card{ order:1 !important; }
+    #tab-clients main.stack{ order:2 !important; }
+  }
+
   </style>
 </head>
 <body>
@@ -789,14 +795,57 @@ function resetNewClientFields(){
   // источник ставим по умолчанию (первая площадка)
   const sSource = document.getElementById('sSource');
   if (sSource) {
-    fillSelect(
-      sSource,
-      Store.data.catalog.platforms.map(p => ({ value:p, label:p })),
-      Store.data.catalog.platforms[0]
-    );
+    fillSourceSelectById('sSource', Store.data.catalog.platforms[0]);
   }
 }
 
+const CUSTOM_SOURCE_VALUE = '__custom__';
+
+function ensurePlatform(name){
+  if(!name) return;
+  if(!Store.data.catalog.platforms.includes(name)){
+    Store.data.catalog.platforms.push(name);
+    Store.save();
+  }
+}
+
+function ensureBuiltInSources(){
+  // добавляем только если ещё нет
+  ['Наружняя реклама','Дом чат'].forEach(ensurePlatform);
+}
+
+// селект источника с пунктом «Добавить свой»
+function wireCustomSource(sel){
+  if(!sel || sel.dataset.customWired) return;
+  sel.addEventListener('change', ()=>{
+    if(sel.value === CUSTOM_SOURCE_VALUE){
+      const typed = prompt('Введите площадку (откуда узнали):','');
+      if(typed && typed.trim()){
+        const name = typed.trim();
+        ensurePlatform(name);
+        initSelectors();          // перерисуем все селекты
+        sel.value = name;         // и сразу выберем введённый
+        if(sel.id === 'source'){  // если это карточка клиента — сразу сохраним
+          const c = getClient();
+          if(c){ c.source = name; Store.save(); }
+        }
+      } else {
+        // отменили — вернём безопасное значение
+        sel.value = Store.data.catalog.platforms[0] || '';
+      }
+    }
+  });
+  sel.dataset.customWired = '1';
+}
+
+function fillSourceSelectById(id, value){
+  const sel = document.getElementById(id);
+  if(!sel) return;
+  const opts = Store.data.catalog.platforms.map(p=>({value:p, label:p}));
+  opts.push({value:CUSTOM_SOURCE_VALUE, label:'Добавить свой'});
+  fillSelect(sel, opts, value ?? sel.value);
+  wireCustomSource(sel);
+}
 
 function startOfDay(d){ const t=new Date(d); t.setHours(0,0,0,0); return t; }
 function nextBirthdayDate(birthStr){
@@ -1170,11 +1219,11 @@ function thresholdsFor(total){ if(total===12) return {mid1:4,mid2:8,final:12};
 /* ===== UI fill/select ===== */
 function fillSelect(sel,options,value){const keep=sel.value;sel.innerHTML="";options.forEach(({value:v,label})=>{const o=document.createElement('option');o.value=v;o.textContent=label;sel.appendChild(o)});if(value!=null)sel.value=value;else if(keep)sel.value=keep}
 function initSelectors(){
-  const src=document.getElementById('source');if(src)fillSelect(src,Store.data.catalog.platforms.map(p=>({value:p,label:p})));
+  const src = document.getElementById('source'); if(src) fillSourceSelectById('source');
   const mc=document.getElementById('mClient');if(mc)fillSelect(mc,Store.data.clients.map(c=>({value:c.id,label:c.fio||"Без имени"})));
   const opItem=document.getElementById('opItem');if(opItem)fillSelect(opItem,Store.data.inventory.items.map(i=>({value:i.id,label:i.name})));
   // sale modal
-  const sSource=document.getElementById('sSource');if(sSource)fillSelect(sSource,Store.data.catalog.platforms.map(p=>({value:p,label:p})));
+  const sSource = document.getElementById('sSource'); if(sSource) fillSourceSelectById('sSource');
   const sSub=document.getElementById('sSub');if(sSub)fillSelect(sSub,Store.data.catalog.subs.map(s=>({value:s.id,label:`${s.name} — ${s.price} ₽`})));
   const sClient=document.getElementById('sClient');if(sClient){
     const opts=[{value:"__new__",label:"+ Новый клиент"},...Store.data.clients.map(c=>({value:c.id,label:c.fio||"Без имени"}))];
@@ -2066,6 +2115,7 @@ document.getElementById('addOpBtn').onclick=()=>{
 document.getElementById('addSubBtn').onclick=()=>{const name=(document.getElementById('subName').value||"").trim();if(!name)return alert("Название");const sessions=parseInt(document.getElementById('subSessions').value||1,10);const duration=document.getElementById('subDuration').value;const price=parseInt(document.getElementById('subPrice').value||0,10);Store.data.catalog.subs.push({id:uuid(),name,sessions,duration,price});document.getElementById('subName').value="";document.getElementById('subSessions').value="";document.getElementById('subPrice').value="";Store.save()};
 
 function renderAll(){
+  ensureBuiltInSources();
   initSelectors();
   renderClients(document.getElementById('search').value||"");
   if(currentClientId){ loadClientForm(); } else { clearClientForm(); }
