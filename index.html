@@ -272,7 +272,7 @@
 <body>
 
 <header>
-  <h1><span class="brand">IDEAL CONTOURS</span> — CRM · Записи · Склад · Абонементы</h1>
+
   <div class="actions">
     <button id="loadNowBtn" class="btn">📥 Загрузить с Яндекс.Диска</button>
     <button id="saveNowBtn" class="btn">Сохранить на Яндекс.Диск</button>
@@ -293,6 +293,7 @@
 <!-- Вторая строка с действиями: липкая и автоскрываемая -->
 <div class="action-tabs" id="actionTabs">
   <div class="tab" data-tab="reports">Отчёты</div>
+  <div class="tab" id="clientReportTab">Отчёт клиенты</div>
   <div class="tab" id="quickSaleTab">+ Продажа</div>
 </div>
 
@@ -321,6 +322,8 @@
           <label>Дата рождения <input id="birth" type="date"/></label>
           <label></label><label></label>
         </div>
+        <div class="badge" id="clientCreated">Клиент добавлен: —</div>
+        <div class="badge" id="clientLastPurchase">Последняя покупка: —</div>
         <div class="card" style="margin-top:12px">
           <h3>Абонементы клиента</h3>
           <div class="content stack" id="purchasesArea"></div>
@@ -546,6 +549,34 @@
     </div>
   </div>
 </div>
+
+
+<!-- Модалка ОТЧЁТ КЛИЕНТЫ -->
+<div class="modal" id="clientReportModal">
+  <div class="sheet">
+    <h3>Отчёт по клиентам</h3>
+    <div class="content" style="display:grid;grid-template-columns:280px 1fr;gap:12px">
+      <!-- Сайдбар: поиск + список клиентов -->
+      <aside class="card" style="max-height:60vh;overflow:auto">
+        <div class="content stack">
+          <input id="rSearch" placeholder="Поиск клиента..."/>
+          <div id="rList" class="list"></div>
+        </div>
+      </aside>
+
+      <!-- Правая часть: сводка -->
+      <main class="stack">
+        <div class="row" style="justify-content:space-between">
+          <div class="badge" id="rTitle">—</div>
+          <button class="btn" id="rClose">Закрыть</button>
+        </div>
+        <div id="rSummary" class="stack"></div>
+        <div id="rTables" class="stack"></div>
+      </main>
+    </div>
+  </div>
+</div>
+
 
 <script>
 /* === App lock helpers (overlay + флаг) === */
@@ -820,6 +851,14 @@ function setFutureMinForModal(){
   }
 }
 
+function fmtRuDateIso(iso){
+  if(!iso) return '—';
+  // берём только дату, без времени/таймзоны
+  const ymd = iso.slice(0,10); // 'YYYY-MM-DD'
+  const [y,m,d] = ymd.split('-').map(Number);
+  if(!y||!m||!d) return '—';
+  return String(d).padStart(2,'0')+'.'+String(m).padStart(2,'0')+'.'+y;
+}
 
 function ymdLocal(d){const dt=new Date(d);return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0')}
 function timeLocal(d){const dt=new Date(d);return String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0')}
@@ -836,7 +875,13 @@ function closeEventModal(){
   unlockZoom();                               // возвращаем зум
 }
 
-
+function lastPurchaseDateISO(c){
+  const list = (c.purchases||[]).filter(p => p.createdAt);
+  if (!list.length) return null;
+  return list
+    .map(p => p.createdAt)
+    .sort((a,b) => new Date(b) - new Date(a))[0];
+}
 
 
 /* ===== Store ===== */
@@ -893,6 +938,17 @@ function defaultPriceForSub(id){const s=getSubById(id);return s?s.price||0:0}
 
 /* ===== Migration to purchases model ===== */
 function migrateData(){
+  (Store.data.clients||[]).forEach(c=>{
+    if (!c.createdAt) {
+      let first = null;
+      if (c.purchases && c.purchases.length) {
+        first = c.purchases
+          .map(p => new Date(p.createdAt || Date.now()))
+          .sort((a,b)=>a-b)[0];
+      }
+      c.createdAt = (first ? first : new Date()).toISOString();
+    }
+  });
   (Store.data.clients||[]).forEach(c=>{
     if(!c.purchases) c.purchases=[];
     // Migrate legacy fields (single-sub model)
@@ -1023,10 +1079,11 @@ function renderClients(filter=""){
 
     const div = document.createElement('div');
     div.className = "client-item";
+    const createdShort = fmtRuDateIso(c.createdAt);
     div.innerHTML = `
       <div>
         <div><strong>${c.fio || "Без имени"}</strong>${bdayIcon}</div>
-        <div class="muted">${(c.purchases?.length||0)} абон.</div>
+        <div class="muted">${(c.purchases?.length||0)} абон. · с ${createdShort}</div>
       </div>
       <div class="stack right">
         <span class="pill ${debt>0?'warn-t':'ok-t'}">${fmtRub(debt)}</span>
@@ -1069,6 +1126,14 @@ function loadClientForm(){
   document.getElementById('source').value=c.source||Store.data.catalog.platforms[0];
   document.getElementById('birth').value=c.birth||"";
   document.getElementById('note').value=c.note||"";
+
+  const createdEl = document.getElementById('clientCreated');
+  if (createdEl) createdEl.textContent = 'Клиент добавлен: ' + fmtRuDateIso(c.createdAt);
+  const lpEl = document.getElementById('clientLastPurchase');
+  if (lpEl) {
+    const lastISO = lastPurchaseDateISO(c);
+    lpEl.textContent = 'Последняя покупка: ' + (lastISO ? fmtRuDateIso(lastISO) : '—');
+  }
 }
 function clearClientForm(){
   ['fio','phone','birth','note'].forEach(id=>{
@@ -1124,10 +1189,13 @@ function renderPurchases(){
 
     const head=document.createElement('div');
     head.className='head';
+
+    const purchasedOn = fmtRuDateIso(p.createdAt);
     head.innerHTML=`
       <div>
         <strong>${sub?.name||'—'}</strong>
         <div class="muted">${status}</div>
+        <div class="muted">Куплен: ${purchasedOn}</div>
       </div>
       <div class="right" style="display:flex; gap:8px; align-items:center">
         <span class="pill ${debt>0?'warn-t':'ok-t'}">${debt>0?'Долг: ':''}${fmtRub(debt)}</span>
@@ -1770,7 +1838,8 @@ document.getElementById('sCreate').onclick=()=>{
       source:document.getElementById('sSource').value||Store.data.catalog.platforms[0],
       birth:document.getElementById('sBirth').value||"",
       note:"",
-      purchases:[]
+      purchases:[],
+      createdAt: new Date().toISOString()
     };
     Store.data.clients.push(c);
     currentClientId=c.id;
@@ -1812,7 +1881,8 @@ if (delBtn) delBtn.onclick = deleteCurrentClient;
 
 document.querySelectorAll('.tab').forEach(el=>{
   el.onclick=()=>{
-    if(el.id==='quickSaleTab'){openSale();return}
+    if(el.id==='clientReportTab'){ openClientReport(); return; }
+    if(el.id==='quickSaleTab'){ openSale(); return; }
     document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');
     const show=el.dataset.tab;
     if (show==='clients') { currentClientId = null; }
@@ -1959,6 +2029,267 @@ function renderEventsTable(){
 }
 document.getElementById('opDate').value=ymdLocal(new Date());
 document.getElementById('repMonth').value=new Date().toISOString().slice(0,7);
+
+
+/* ===== Клиентский отчёт ===== */
+let currentReportClientId = '__all__';
+
+function fmtPct(val){
+  if (!isFinite(val)) return '0%';
+  return Math.round(val*100) + '%';
+}
+
+function openClientReport(){
+  lockZoom();
+  currentReportClientId = '__all__';
+  renderReportClientList('');
+  renderClientReport('__all__');
+  document.getElementById('clientReportModal').classList.add('open');
+}
+function closeClientReport(){
+  document.getElementById('clientReportModal').classList.remove('open');
+  unlockZoom();
+}
+
+function renderReportClientList(filter){
+  const box = document.getElementById('rList'); if(!box) return;
+  box.innerHTML = '';
+
+  // Псевдоклиент "Все клиенты"
+  const allEl = document.createElement('div');
+  allEl.className = 'client-item';
+  allEl.innerHTML = `<div><strong>Все клиенты</strong></div><div class="stack right"><span class="pill">${Store.data.clients.length}</span></div>`;
+  allEl.onclick = () => { currentReportClientId='__all__'; renderClientReport('__all__'); };
+  box.appendChild(allEl);
+
+  // Фильтр
+  const list = Store.data.clients
+    .filter(c => (c.fio||'').toLowerCase().includes((filter||'').toLowerCase()))
+    .sort((a,b)=> (a.fio||'').localeCompare(b.fio||'','ru'));
+
+  list.forEach(c=>{
+    const debt = clientDebt(c);
+    const lastISO = lastPurchaseDateISO(c);
+    const el = document.createElement('div');
+    el.className = 'client-item';
+    el.innerHTML = `
+      <div>
+        <div><strong>${c.fio||'Без имени'}</strong></div>
+        <div class="muted">посл. покупка: ${lastISO ? fmtRuDateIso(lastISO) : '—'}</div>
+      </div>
+      <div class="stack right"><span class="pill ${debt>0?'warn-t':'ok-t'}">${fmtRub(debt)}</span></div>
+    `;
+    el.onclick = () => { currentReportClientId=c.id; renderClientReport(c.id); };
+    box.appendChild(el);
+  });
+}
+
+document.getElementById('rClose')?.addEventListener('click', closeClientReport);
+document.getElementById('rSearch')?.addEventListener('input', (e)=> renderReportClientList(e.target.value));
+
+// Строим HTML карточки-плитки
+function kpiCard(label, value){
+  return `<div class="card"><div class="content"><div class="muted">${label}</div><div style="font-size:18px;font-weight:800">${value}</div></div></div>`;
+}
+
+// Общая сводка по всем клиентам
+function renderOverallClients(){
+  const title = document.getElementById('rTitle');
+  const sumBox = document.getElementById('rSummary');
+  const tables = document.getElementById('rTables');
+  if (!title || !sumBox || !tables) return;
+
+  title.textContent = 'Сводка по всем клиентам';
+
+  const allPurchases = [];
+  Store.data.clients.forEach(c => (c.purchases||[]).forEach(p => allPurchases.push({c,p})));
+
+  const totalClients = Store.data.clients.length;
+  const totalPurchases = allPurchases.length;
+  let totalAccrued = 0, totalPaid = 0, totalDebt = 0;
+
+  const bySub = new Map(); // name -> {count,sum}
+  const bySource = new Map(); // source -> count
+  const paidByClient = new Map(); // clientId -> sum
+
+  let lastPurchaseISO = null;
+
+  allPurchases.forEach(({c,p})=>{
+    const price = (+p.price||0) + productSum(p);
+    const paid  = paidSumPurchase(p);
+    const due   = duePurchase(p);
+    totalAccrued += price;
+    totalPaid    += paid;
+    totalDebt    += due;
+
+    const subName = getSubById(p.subId)?.name || '—';
+    const sRec = bySub.get(subName) || {count:0,sum:0};
+    sRec.count++; sRec.sum += price; bySub.set(subName, sRec);
+
+    const src = c.source || '—';
+    bySource.set(src, (bySource.get(src)||0)+1);
+
+    if (p.createdAt){
+      lastPurchaseISO = lastPurchaseISO
+        ? (new Date(p.createdAt) > new Date(lastPurchaseISO) ? p.createdAt : lastPurchaseISO)
+        : p.createdAt;
+    }
+
+    paidByClient.set(c.id, (paidByClient.get(c.id)||0) + paid);
+  });
+
+  // Самый популярный абонемент
+  let popular = {name:'—',count:0};
+  bySub.forEach((v,k)=>{ if(v.count>popular.count) popular = {name:k,count:v.count}; });
+
+  // Топ-3 клиентов по оплатам
+  const topClients = Array.from(paidByClient.entries())
+    .sort((a,b)=>b[1]-a[1])
+    .slice(0,3)
+    .map(([cid,sum])=>{
+      const cl = Store.data.clients.find(x=>x.id===cid);
+      return `${cl?.fio||'Без имени'} — ${fmtRub(sum)}`;
+    });
+
+  // KPI
+  sumBox.innerHTML = `
+    <div class="grid2" style="grid-template-columns:repeat(4,1fr);gap:10px">
+      ${kpiCard('Клиентов', totalClients)}
+      ${kpiCard('Покупок', totalPurchases)}
+      ${kpiCard('Начислено', fmtRub(totalAccrued))}
+      ${kpiCard('Оплачено', fmtRub(totalPaid))}
+    </div>
+    <div class="grid2" style="grid-template-columns:repeat(3,1fr);gap:10px">
+      ${kpiCard('Долг', fmtRub(totalDebt))}
+      ${kpiCard('Популярный абонемент', totalPurchases? `${popular.name} (${fmtPct(popular.count/totalPurchases)})` : '—')}
+      ${kpiCard('Последняя покупка', lastPurchaseISO ? fmtRuDateIso(lastPurchaseISO) : '—')}
+    </div>
+    <div class="card"><div class="content">
+      <div class="muted" style="margin-bottom:6px">ТОП-3 клиентов по оплатам</div>
+      ${topClients.length ? topClients.map(x=>`<div>• ${x}</div>`).join('') : '—'}
+    </div></div>
+    <div class="card"><div class="content">
+      <div class="muted" style="margin-bottom:6px">Площадки (клиентов)</div>
+      ${bySource.size ? Array.from(bySource.entries()).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div>• ${k}: ${v}</div>`).join('') : '—'}
+    </div></div>
+  `;
+
+  // Таблица по абонементам
+  const rows = Array.from(bySub.entries())
+    .sort((a,b)=>b[1].count - a[1].count)
+    .map(([name,info])=>{
+      const avg = info.count ? Math.round(info.sum/info.count) : 0;
+      const share = totalPurchases ? fmtPct(info.count/totalPurchases) : '0%';
+      return `<tr><td>${name}</td><td class="right">${info.count}</td><td class="right">${share}</td><td class="right">${fmtRub(info.sum)}</td><td class="right">${fmtRub(avg)}</td></tr>`;
+    }).join('');
+
+  tables.innerHTML = `
+    <section class="card">
+      <h3>Абонементы — распределение</h3>
+      <div class="content xscroll">
+        <table class="table-wide">
+          <thead><tr><th>Абонемент</th><th class="right">Покупок</th><th class="right">Доля</th><th class="right">Начислено</th><th class="right">Средний чек</th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="5" class="muted">Нет данных</td></tr>'}</tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+// Сводка по конкретному клиенту
+function renderSingleClient(c){
+  const title = document.getElementById('rTitle');
+  const sumBox = document.getElementById('rSummary');
+  const tables = document.getElementById('rTables');
+  if (!title || !sumBox || !tables) return;
+
+  title.textContent = `Клиент: ${c.fio || 'Без имени'}`;
+
+  const purchases = (c.purchases||[]).slice().sort((a,b)=> new Date(b.createdAt) - new Date(a.createdAt));
+  const count = purchases.length;
+  const lastISO = lastPurchaseDateISO(c);
+  let accrued=0, paid=0, debt=0;
+
+  const bySub = new Map(); // name -> {count,sum}
+
+  purchases.forEach(p=>{
+    const price = (+p.price||0) + productSum(p);
+    const pay   = paidSumPurchase(p);
+    accrued += price;
+    paid    += pay;
+    debt    += duePurchase(p);
+
+    const name = getSubById(p.subId)?.name || '—';
+    const rec = bySub.get(name) || {count:0,sum:0};
+    rec.count++; rec.sum += price; bySub.set(name, rec);
+  });
+
+  sumBox.innerHTML = `
+    <div class="grid2" style="grid-template-columns:repeat(4,1fr);gap:10px">
+      ${kpiCard('Добавлен', c.createdAt ? fmtRuDateIso(c.createdAt) : '—')}
+      ${kpiCard('Покупок', count)}
+      ${kpiCard('Последняя покупка', lastISO ? fmtRuDateIso(lastISO) : '—')}
+      ${kpiCard('Площадка', c.source || '—')}
+    </div>
+    <div class="grid2" style="grid-template-columns:repeat(3,1fr);gap:10px">
+      ${kpiCard('Начислено всего', fmtRub(accrued))}
+      ${kpiCard('Оплачено', fmtRub(paid))}
+      ${kpiCard('Долг', fmtRub(debt))}
+    </div>
+  `;
+
+  const rows = Array.from(bySub.entries())
+    .sort((a,b)=>b[1].count - a[1].count)
+    .map(([name,info])=>{
+      const avg = info.count ? Math.round(info.sum/info.count) : 0;
+      return `<tr><td>${name}</td><td class="right">${info.count}</td><td class="right">${fmtRub(info.sum)}</td><td class="right">${fmtRub(avg)}</td></tr>`;
+    }).join('');
+
+  // Последние покупки (3 шт)
+  const last3 = purchases.slice(0,3).map(p=>{
+    const sub = getSubById(p.subId)?.name || '—';
+    const price = (+p.price||0) + productSum(p);
+    return `<tr><td>${fmtRuDateIso(p.createdAt)}</td><td>${sub}</td><td class="right">${fmtRub(price)}</td></tr>`;
+  }).join('');
+
+  tables.innerHTML = `
+    <section class="card">
+      <h3>Разбивка по абонементам</h3>
+      <div class="content xscroll">
+        <table class="table-wide">
+          <thead><tr><th>Абонемент</th><th class="right">Покупок</th><th class="right">Начислено</th><th class="right">Средний чек</th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="4" class="muted">Нет покупок</td></tr>'}</tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Последние покупки</h3>
+      <div class="content xscroll">
+        <table class="table-wide">
+          <thead><tr><th>Дата</th><th>Абонемент</th><th class="right">Сумма</th></tr></thead>
+          <tbody>${last3 || '<tr><td colspan="3" class="muted">Нет покупок</td></tr>'}</tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function renderClientReport(id){
+  if (id==='__all__') renderOverallClients();
+  else {
+    const c = Store.data.clients.find(x=>x.id===id);
+    if (c) renderSingleClient(c); else renderOverallClients();
+  }
+}
+
+// клик по новой кнопке «Отчёт клиенты»
+const clientReportTab = document.getElementById('clientReportTab');
+if (clientReportTab){
+  clientReportTab.addEventListener('click', openClientReport);
+}
+
+
 
 </script>
 
