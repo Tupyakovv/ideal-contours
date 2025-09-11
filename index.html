@@ -319,7 +319,31 @@
       white-space:nowrap;
     }
   }
+  /* === MOBILE: вкладка "Отчёты" (не модалка) === */
+  @media (max-width: 900px){
+    /* KPI 4 -> 2 колонки */
+    #tab-reports [style*="repeat(4,1fr)"]{
+      grid-template-columns: 1fr 1fr !important;
+      gap: 10px !important;
+    }
 
+    /* строка "Месяц – Посчитать": инпут тянется, кнопка не рвёт ряд */
+    #tab-reports .content .row{ gap:8px; }
+    #tab-reports .content .row label{ flex:1 1 220px; min-width:0; }
+    #tab-reports #repMonth{ width:100%; min-width:0; } /* без горизонтального скролла */
+    #tab-reports #calcReportBtn{ flex:0 0 auto; }
+
+    /* чуть компактнее карточки внутри отчёта и без горизонтального скролла */
+    #tab-reports section.card{ overflow:hidden; }
+    #tab-reports section.card .content{ padding:10px 12px; }
+  }
+  
+  /* совсем маленькие экраны — KPI в одну колонку */
+  @media (max-width: 420px){
+    #tab-reports [style*="repeat(4,1fr)"]{
+      grid-template-columns: 1fr !important;
+    }
+  }
 
 
   </style>
