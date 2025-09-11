@@ -1966,7 +1966,9 @@ document.getElementById('repMonth').value=new Date().toISOString().slice(0,7);
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js?v=39'); // ← добавили v=38
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js', { scope: '/' });
+  });
 }
 </script>
 
@@ -2013,8 +2015,6 @@ if ('serviceWorker' in navigator) {
     if (res.status === 401 || res.status === 403) throw new Error('AUTH');
     if (!res.ok) throw new Error('upload link ' + res.status);
     return (await res.json()).href;
-  }
-    throw new Error('upload link failed');
   }
 
   // Пинг для проверки токена
@@ -2081,7 +2081,7 @@ if ('serviceWorker' in navigator) {
         if (res.status === 401 || res.status === 403) throw new Error('AUTH');
         if (res.status === 404) { updateDiskStatus('Яндекс.Диск: файл ещё не создан'); return null; }
         if (!res.ok) throw new Error('download ' + res.status);
-  
+
         const json = await res.json();
         if (forceLocalOverride){
           localStorage.setItem(storeKey, JSON.stringify(json));
@@ -2099,7 +2099,7 @@ if ('serviceWorker' in navigator) {
         return null;
       }
     },
-  
+
     async save(localData){
       try{
         const res = await fetch(`${API_FILE}?path=${encodeURIComponent(YD_PATH)}`, {
@@ -2195,9 +2195,4 @@ if ('serviceWorker' in navigator) {
   </div></div>
 </div>
 </body>
-
 </html>
-
-
-
-
