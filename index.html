@@ -1994,7 +1994,7 @@ if ('serviceWorker' in navigator) {
   }
 
   // ВАЖНО: путь в ПАПКЕ ПРИЛОЖЕНИЯ
-  const YD_PATH = 'app:/ideal_contours_data.json';
+  const YD_PATH = 'disk:/ideal_contours_data.json';
 
   // Вспомогательные функции: получаем одноразовые ссылки
   async function yandexGetDownloadUrl(){
@@ -2016,7 +2016,7 @@ if ('serviceWorker' in navigator) {
 
   // Пинг для проверки токена
   async function yandexPing(){
-     const url = 'https://cloud-api.yandex.net/v1/disk/resources?path=' + encodeURIComponent('app:/');
+     const url = 'https://cloud-api.yandex.net/v1/disk/resources?path=' + encodeURIComponent('disk:/');
      const res = await fetch(url, { headers: { Authorization: 'OAuth ' + YD_TOKEN }});
      return res.ok; // 200 — токен годен для app:/
    }
@@ -2193,3 +2193,4 @@ if ('serviceWorker' in navigator) {
 </body>
 
 </html>
+
