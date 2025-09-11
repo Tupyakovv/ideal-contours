@@ -1995,33 +1995,25 @@ if ('serviceWorker' in navigator) {
 
   // ВАЖНО: путь в ПАПКЕ ПРИЛОЖЕНИЯ
   // вместо одного пути — два кандидата
-  const YD_FILENAME = '1.json';
-  const YD_PATHS = ['app:/'+YD_FILENAME, 'disk:/'+YD_FILENAME];
-  let YD_PATH = YD_PATHS[0]; // актуальный успешно найденный путь
+  const YD_PATH = 'disk:/1.json';
 
+  // Вспомогательные функции: получаем одноразовые ссылки
   async function yandexGetDownloadUrl(){
-    for (const p of YD_PATHS){
-      const url = 'https://cloud-api.yandex.net/v1/disk/resources/download?path=' + encodeURIComponent(p);
-      const res = await fetch(url, { headers: { Authorization: 'OAuth ' + YD_TOKEN }});
-      if (res.status === 401 || res.status === 403) throw new Error('AUTH');
-      if (res.status === 404) continue;             // пробуем следующий путь
-      if (!res.ok) throw new Error('download link ' + res.status);
-      YD_PATH = p;
-      return (await res.json()).href;
-    }
-    return null; // нет ни там, ни там
+    const url = 'https://cloud-api.yandex.net/v1/disk/resources/download?path=' + encodeURIComponent(YD_PATH);
+    const res = await fetch(url, { headers: { Authorization: 'OAuth ' + YD_TOKEN }});
+    if (res.status === 401 || res.status === 403) throw new Error('AUTH'); // нет прав/плохой токен
+    if (res.status === 404) return null;                                   // файла ещё нет
+    if (!res.ok) throw new Error('download link ' + res.status);
+    return (await res.json()).href;
   }
 
   async function yandexGetUploadUrl(){
-    for (const p of YD_PATHS){
-      const url = 'https://cloud-api.yandex.net/v1/disk/resources/upload?overwrite=true&path=' + encodeURIComponent(p);
-      const res = await fetch(url, { headers: { Authorization: 'OAuth ' + YD_TOKEN }});
-      if (res.status === 401 || res.status === 403) throw new Error('AUTH');
-      if (res.ok){
-        YD_PATH = p;
-        return (await res.json()).href;
-      }
-    }
+    const url = 'https://cloud-api.yandex.net/v1/disk/resources/upload?overwrite=true&path=' + encodeURIComponent(YD_PATH);
+    const res = await fetch(url, { headers: { Authorization: 'OAuth ' + y0__xD667mOBxjMmDogwIXwrRRepr6C2FRlCmsbsa-ZYYdcNmCCxQ' }});
+    if (res.status === 401 || res.status === 403) throw new Error('AUTH');
+    if (!res.ok) throw new Error('upload link ' + res.status);
+    return (await res.json()).href;
+  }
     throw new Error('upload link failed');
   }
 
@@ -2204,3 +2196,4 @@ if ('serviceWorker' in navigator) {
 </body>
 
 </html>
+
