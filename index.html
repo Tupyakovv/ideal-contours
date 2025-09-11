@@ -1994,8 +1994,8 @@ if ('serviceWorker' in navigator) {
   }
 
   // ВАЖНО: путь в ПАПКЕ ПРИЛОЖЕНИЯ
-  // вместо одного пути — два кандидата
-  const YD_PATH = 'disk:/1.json';
+  const API_FILE = '/api/ydisk/file';
+  const YD_PATH = 'disk:/ideal_contours_data.json';
 
   // Вспомогательные функции: получаем одноразовые ссылки
   async function yandexGetDownloadUrl(){
@@ -2072,60 +2072,61 @@ if ('serviceWorker' in navigator) {
 
   // API загрузки/сохранения
   window.ydisk = {
-    async load({ forceLocalOverride = true } = {}){
+    async load({ forceLocalOverride = true } = {}) {
       updateDiskStatus('Яндекс.Диск: загрузка…');
       try{
-        const href = await yandexGetDownloadUrl();
-        if (!href){
-          updateDiskStatus('Яндекс.Диск: файл ещё не создан');
-          return null;
-        }
-        const fileRes = await fetch(href);
-        if (!fileRes.ok) throw new Error('download ' + fileRes.status);
-        const json = await fileRes.json();
+        const res = await fetch(`${API_FILE}?path=${encodeURIComponent(YD_PATH)}`, {
+          headers: { Authorization: 'OAuth ' + YD_TOKEN }
+        });
+        if (res.status === 401 || res.status === 403) throw new Error('AUTH');
+        if (res.status === 404) { updateDiskStatus('Яндекс.Диск: файл ещё не создан'); return null; }
+        if (!res.ok) throw new Error('download ' + res.status);
+  
+        const json = await res.json();
         if (forceLocalOverride){
           localStorage.setItem(storeKey, JSON.stringify(json));
           if (window.Store) window.Store.data = json;
         }
         updateDiskStatus('Яндекс.Диск: загружено ✓');
         return json;
-      }
-      catch(e){
-        if (e.message === 'AUTH'){
+      } catch (e){
+        if (e.message === 'AUTH') {
           updateDiskStatus('Яндекс.Диск: требуется токен');
-          if (AUTO_PROMPT_TOKEN_ON_AUTH) {
-            await askToken(); // попросим токен
-            try {
-              // и сразу повторим попытку загрузки
-              return await window.ydisk.load({ forceLocalOverride });
-            } catch {}
-          }
-          return null;
+          if (AUTO_PROMPT_TOKEN_ON_AUTH) { await askToken(); return await window.ydisk.load({ forceLocalOverride }); }
         }
         console.error('Yandex load error', e);
         updateDiskStatus('Яндекс.Диск: ошибка загрузки');
         return null;
       }
     },
-
+  
     async save(localData){
       try{
-        const href = await yandexGetUploadUrl();
-        const put = await fetch(href, { method:'PUT', body: JSON.stringify(localData ?? Store.data) });
-        if (put.status === 401 || put.status === 403) throw new Error('AUTH');
-        if (!put.ok) throw new Error('upload ' + put.status);
+        const res = await fetch(`${API_FILE}?path=${encodeURIComponent(YD_PATH)}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'OAuth ' + YD_TOKEN
+          },
+          body: JSON.stringify(localData ?? Store.data),
+        });
+        if (res.status === 401 || res.status === 403) throw new Error('AUTH');
+        if (!res.ok) throw new Error('upload ' + res.status);
         updateDiskStatus('Яндекс.Диск: сохранено ✓');
-      }
-      catch(e){
-        if (e.message === 'AUTH'){
+      } catch (e){
+        if (e.message === 'AUTH') {
           updateDiskStatus('Яндекс.Диск: требуется токен');
           if (AUTO_PROMPT_TOKEN_ON_AUTH) {
             await askToken();
             try {
-              // повторим попытку сохранения уже с новым токеном
-              const href = await yandexGetUploadUrl();
-              const put = await fetch(href, { method:'PUT', body: JSON.stringify(localData ?? Store.data) });
-              if (!put.ok) throw new Error('upload ' + put.status);
+              await fetch(`${API_FILE}?path=${encodeURIComponent(YD_PATH)}`, {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: 'OAuth ' + YD_TOKEN
+                },
+                body: JSON.stringify(localData ?? Store.data),
+              });
               updateDiskStatus('Яндекс.Диск: сохранено ✓');
             } catch (err) { console.error(err); }
           }
@@ -2196,6 +2197,7 @@ if ('serviceWorker' in navigator) {
 </body>
 
 </html>
+
 
 
 
